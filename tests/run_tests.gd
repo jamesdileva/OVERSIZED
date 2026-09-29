@@ -16,6 +16,10 @@ func _initialize() -> void:
 	_test_hash_rebuild_no_accumulation()
 	_test_sim_converges_on_target()
 	_test_sim_survives_despawn_mid_run()
+	_test_sword_swing_cycles_forever()
+	_test_sword_swing_window()
+	_test_hash_circle_candidates_superset()
+	_test_sim_damage_and_death()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -177,3 +181,82 @@ func _avg_dist(sim: HordeSim, target: Vector2) -> float:
 	for i in sim.active_count:
 		total += sim.positions[i].distance_to(target)
 	return total / float(maxi(sim.active_count, 1))
+
+
+func _test_sword_swing_cycles_forever() -> void:
+	print("sword swing: never stops cycling (no cooldown gate)")
+	var s := SwordSwing.new()
+	s.start(0.0)
+	var seen_active := 0
+	var ever_idle := false
+	for f in 3600:  # 60 sim-seconds at 60Hz
+		s.advance(1.0 / 60.0)
+		if s.phase == SwordSwing.Phase.ACTIVE:
+			seen_active += 1
+		if s.phase == SwordSwing.Phase.IDLE:
+			ever_idle = true
+	var cycles := float(s.swing_index)
+	check(not ever_idle, "never enters IDLE across 3600 ticks")
+	check(seen_active > 60, "active windows recur (%d active ticks across %.1f cycles)" % [seen_active, cycles])
+	var expected := 3600.0 / 60.0 / (0.13 + 0.09 + 0.17)
+	check(absf(cycles - expected) < expected * 0.05,
+			"cycle rate matches 1/(windup+active+recovery) within 5%% (%.1f vs %.1f)" % [cycles, expected])
+
+
+func _test_sword_swing_window() -> void:
+	print("sword swing: hit window tracks the sweep")
+	var s := SwordSwing.new()
+	s.start(0.0)
+	var guard := 0
+	while s.phase != SwordSwing.Phase.ACTIVE and guard < 1000:
+		s.advance(1.0 / 240.0)
+		guard += 1
+	check(s.phase == SwordSwing.Phase.ACTIVE, "reached ACTIVE")
+	var lead := s.blade_angle()
+	var behind := wrapf(lead - 0.2 * s.sweep_dir, -PI, PI)
+	var ahead := wrapf(lead + 0.2 * s.sweep_dir, -PI, PI)
+	check(s.in_hit_window(behind), "angle just behind blade edge is hittable")
+	check(not s.in_hit_window(ahead), "angle ahead of blade edge is not hittable")
+
+
+func _test_hash_circle_candidates_superset() -> void:
+	print("spatial hash: circle_candidates covers brute force (radius > cell)")
+	var grid := SpatialHash.new(48.0)
+	var pts := PackedVector2Array()
+	pts.resize(300)
+	for i in 300:
+		pts[i] = Vector2(randf() * 1200.0 - 600.0, randf() * 1200.0 - 600.0)
+	grid.rebuild(pts, 300)
+	var ok := true
+	for trial in 20:
+		var c := Vector2(randf() * 1000.0 - 500.0, randf() * 1000.0 - 500.0)
+		var r := randf_range(30.0, 160.0)
+		var cand := grid.circle_candidates(c, r)
+		var in_cand := {}
+		for j in cand:
+			in_cand[j] = true
+		for i in 300:
+			if pts[i].distance_to(c) <= r and not in_cand.has(i):
+				ok = false
+	check(ok, "every brute-force hit appears in candidates (20 random queries, r up to 160 > cell 48)")
+
+
+func _test_sim_damage_and_death() -> void:
+	print("horde sim: damage, flash, knockback, death")
+	var sim := HordeSim.new(16)
+	var deaths := [0]
+	sim.enemy_killed.connect(func(_at: Vector2) -> void: deaths[0] += 1)
+	var idx := sim.spawn(Vector2.ZERO)
+	var hp0: float = sim.healths[idx]
+	var alive := sim.damage(idx, 10.0, Vector2.RIGHT)
+	check(not alive, "sub-lethal hit does not kill")
+	check(sim.healths[idx] == hp0 - 10.0, "health reduced by damage amount")
+	check(sim.hit_flash[idx] == 1.0, "hit flash set on damage")
+	check(sim.velocities[idx].x > 0.0, "knockback applied along hit direction")
+	alive = sim.damage(idx, sim.max_health, Vector2.LEFT)
+	check(alive, "lethal damage reports a kill")
+	check(deaths[0] == 1, "enemy_killed emitted once (lambdas capture arrays by reference)")
+	check(sim.active_count == 0, "dead enemy despawned")
+	sim.damage(-5, 1.0, Vector2.ZERO)
+	sim.damage(99, 1.0, Vector2.ZERO)
+	check(sim.active_count == 0, "out-of-range damage is ignored")

@@ -2,7 +2,9 @@
 
 A 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7** (GDScript). One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves; run-scoped Sword Upgrades plus a permanently-growing pool of auto-casting Universal Abilities.
 
-**Status:** Pre-production — Sprint 0.1 (horde performance spike).
+**Status:** Pre-production — Sprint 0.2 (core feel prototype).
+
+![gameplay](docs/media/sprint-0.2-gameplay.png)
 
 ## Docs
 
@@ -20,19 +22,21 @@ Open the project in Godot 4.7.x, or:
 godot --path .
 ```
 
-Debug console toggles with **F1**. Commands: `stress_test <n>` (activate n enemies, full sim), `render_only <n>` (n enemies, AI off — render pipeline isolated), `clear`, `bench` (count-sweep benchmark, prints results and quits), `help`.
+Controls: **WASD / left stick** to move (the sword swings itself — always, no cooldown), **R** restarts, **F1** opens the debug console (`spawn <n>`, `heal`, `restart`, `help`).
 
 ## Tests
 
-Headless logic tests (pool, spatial hash, sim sanity):
+Headless logic tests (pool, spatial hash, sword swing state machine, damage):
 
 ```
 godot --headless --path . --script res://tests/run_tests.gd
 ```
 
-Benchmark (headless = logic-only cost, windowed = full render cost):
+Benchmark (headless = logic-only cost, windowed = full render cost; the scene must be named explicitly now that the main scene is the game):
 
 ```
-godot --headless --path . -- --bench
-godot --path . -- --bench
+godot --headless --path . res://scenes/run/stress_test.tscn -- --bench
+godot --path . res://scenes/run/stress_test.tscn -- --bench
 ```
+
+Automated gameplay screenshot: `godot --path . -- --shot 330` (plays ~5s, saves to `user://sprint02_shot.png`).

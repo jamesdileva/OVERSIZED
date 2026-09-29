@@ -51,6 +51,22 @@ func cell(key: Vector2i) -> Array:
 	return out if out != null else _empty
 
 
+## Superset query around a circle: every index whose position is within
+## `radius` of `center` is guaranteed to be included. Works for radii larger
+## than cell_size (the cell range is expanded to cover it). The result may
+## contain enemies outside the radius — callers apply the exact distance test.
+func circle_candidates(center: Vector2, radius: float) -> PackedInt32Array:
+	var rings := int(ceil(radius / cell_size))
+	var home := key_of(center)
+	var out := PackedInt32Array()
+	for oy in range(-rings, rings + 1):
+		for ox in range(-rings, rings + 1):
+			var cell_arr = _cells.get(home + Vector2i(ox, oy), _empty)
+			for j in cell_arr:
+				out.append(j)
+	return out
+
+
 func clear() -> void:
 	_cells.clear()
 	_used_keys.clear()

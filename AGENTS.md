@@ -40,6 +40,7 @@ Then close the loop: review the sprint result together and agree the next sprint
 
 ## Verification expectations
 
+- **Boot-check the main scene headless every sprint** (`godot --headless --path . --quit-after 60`) and read the output — a parse error in one script can half-load the scene (player works, spawner doesn't) without failing the run. Sprint 0.2's playtest shipped this way.
 - Performance checklist whenever the horde system changes: frame time at 0 / 100 / 300 / 500 concurrent enemies; physics collision-pair count near zero; MultiMesh draw-call count.
 - Build the debug console early (Phase 1, not Phase 3): `spawn_wave <n>`, `grant_xp`, `grant_currency`, `god_mode`, `stress_test <n>`. (`implementation-guide.md` §13)
 - Long-session smoke test (bot holding "move toward nearest enemy") to catch pool exhaustion, leaks, and crash-after-N-minutes bugs that short playtests miss.
