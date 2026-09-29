@@ -104,3 +104,46 @@ One entry per completed sprint, appended in order. Format per `AGENTS.md`: scope
 
 **Next**: playtest Sprint 0.2 for feel, tune the knobs; then Sprint 1.1 — wave loop + Sword Upgrade picks (WaveDef-driven Wave Director, timer-based wave clear, the shared choice-screen component, 5–8 real Sword Upgrades as `.tres` files).
 
+---
+
+## Sprint 1.1 — Wave loop + Sword Upgrade picks (2026-09-28)
+
+**Scope** (from `sprint-roadmap.md`, Phase 1 — Sprint 1.1, approved before build): Wave Director reading `WaveDef` resources; timer-based wave clear; the shared choice-screen component; 8 real Sword Upgrades incl. both combo-archetype proofs; the no-cooldown dash. Out of scope: XP/abilities + boss (1.2), currencies/meta/save (1.3), new enemy types, real art.
+
+**Built**
+
+- Content foundation (`implementation-guide.md` §3): `SwordUpgradeDef` + `WaveDef` Resource schemas; `ContentLoader` autoload scanning `resources/sword_upgrades/` and `resources/waves/`; `EventBus` autoload (wave/upgrade signals). Eight upgrades + five waves exist purely as `.tres` files.
+- `scripts/combat/upgrade_effects.gd` — effect_id → handler registry (reach, arc, cadence, damage, knockback, leech, spin cadence, combo threshold) + the rarity-weighted, stack-aware offer roller. New effect *mechanisms* add a branch; new *content* adds only `.tres` (the fully no-code pipeline is Phase 2 by design).
+- `scenes/run/wave_director/wave_director.gd` — timer-based clear while enemies keep spawning (architecture §4); survivors despawn Brotato-style at clear (no payout until 1.3); waves 1–5 authored, endless scaling by curve past wave 5 (denser/tougher/faster, capped).
+- `scenes/ui/choice_screen/choice_screen.gd` — the shared pick component: 3 cards, run paused, mouse + gamepad navigation (first card auto-focused, `ui_*` navigates), shows owned stack counts. Data-agnostic on purpose — ability picks (1.2) reuse it unchanged.
+- Combo archetype live: `ComboCounter` (pure logic — consecutive landed hits, whiff swing resets) + **Spin Finisher** (every 4th swing sweeps 360°) + **Combo Burst** (15 consecutive hits → AoE shockwave around the hero, `BurstRing` visual, extra shake/hit-stop).
+- **Dash** (player.gd): no cooldown — the only gate is the dash itself finishing (~0.13s, ~150px), brief i-frames, direction from current input or last movement. Zero changes to the sword: decoupled systems mean dashing can't interrupt the swing, exactly as designed.
+- HUD: wave number + timer, kills, combo counter (visible once a combo upgrade is owned). Console gained `wave <n>` for testing late waves.
+
+**Verified**
+
+- Tests: **40/40 pass**, including a new first-class guard: every critical script is `load()`ed and `can_instantiate()`-checked, because a parse error aborts any test touching its class *silently* — this sprint's first run "passed" while `wave_director.gd` was broken; the guard makes that a visible FAIL.
+- Boot-check of the main scene headless: zero script errors.
+- Bench re-run after spawner changes: 2000 → 16.58 ms (≈60 fps) headless — the ~2,200 @ 60fps ceiling holds.
+- Automated screenshots (`docs/media/`): the paused choice screen over a dimmed run (three distinct cards, first focused) and wave-1 gameplay with the timer HUD. Both captures surfaced real bugs on first try: the shot timer originally froze with the paused tree (moved to an ignore-time-scale timer), and shortening `WaveDef.duration` didn't move the already-copied `time_left` (shorten the clock, not just the def).
+
+**Findings worth keeping**
+
+- **The test suite had a silent-skip hole**: a script with a parse error aborts any test function that touches its class, and the remaining checks simply never run — the suite still printed PASSED. Caught only because the import output was read (per the AGENTS.md boot-check rule added in 0.2). The script-compile guard test now converts this class of bug into a normal FAIL.
+- **Float drift in timers**: 30 ticks of `1/30s` don't sum to exactly 1.0s in float64 — the wave timer crosses zero one tick late. Irrelevant at 60fps, but tests that assert exact crossings must allow the +1 tick.
+- Wave-clear despawn was pre-approved as Brotato-style with no payout; when Runeshards arrive in 1.3, revisiting "clear bonus for surviving enemies" is a cheap dopamine win worth considering.
+
+**Decisions & deviations**
+
+- The three pre-approved scope defaults held: despawn-on-clear without payout, 3-card offers, waves 1–5 authored + curve scaling.
+- Upgrade `Swift Strikes` stacks multiplicatively with a 0.05s floor; `Spin Finisher` stacks shorten the cadence (4 → 3 → 2); `Combo Burst` stacks lower the threshold (15 → 12 → 9, floor 6).
+- The automated screenshot mode now shortens wave 1 so the choice screen can be captured; the countdown runs on a process-always, ignore-time-scale timer.
+
+**Deferred**
+
+- XP/leveling + Universal Ability picks + the wave-10 boss (Sprint 1.2); Runeshards/Glory + meta hub + save (1.3); new enemy types (Phase 2); real art.
+- Choice-screen polish (card icons, rarity colors) — deferred until ability picks share the component.
+
+**Next**: Sprint 1.2 — leveling + Universal Ability picks + the first boss (XP pickups, level-up offers through the same choice screen, 5–8 abilities with cooldown timers, wave-10 boss with telegraphed patterns).
+
+
