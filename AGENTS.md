@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Working agreement for AI agents (and humans) contributing to **Oversized** — a 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7.x (GDScript-first, C# as escape hatch)**. One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves, and two independent progression tracks: run-scoped Sword Upgrades (reset every run) and a permanently-growing pool of auto-casting Universal Abilities (gated by persistent Mastery Rank). Target: PC / Steam, premium, single-player. "Oversized" is a placeholder title.
+Working agreement for AI agents (and humans) contributing to **Oversized** — a 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7.x (GDScript-first, C# as escape hatch)**. One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves, and two independent progression tracks: run-scoped Sword Upgrades (reset every run) and a persistent **Hero Level** that unlocks auto-casting Universal Abilities and passives, equipped as a loadout within an Ability-Point budget. A shared tag system (synergies, reactions, evolutions) makes the two tracks interact. Target: PC / Steam, premium, single-player. "Oversized" is a placeholder title.
 
 ## Project documents
 
@@ -35,6 +35,7 @@ Then close the loop: review the sprint result together and agree the next sprint
 - **All damage routes through one pipeline**, so crits, elemental effects, and on-hit hooks apply uniformly regardless of source (sword or auto-cast ability). (`architecture.md` §7)
 - **The sword never has a cooldown.** Windup → Active → Recovery → Windup, forever. Attack-pace upgrades shorten windup/recovery; they don't add cooldowns. Universal Abilities are the opposite: always on individual cooldowns, never player-triggered. (`implementation-guide.md` §5.1, §7)
 - **Saves carry a `schema_version` field from the very first file written.** (`implementation-guide.md` §10)
+- **One persistent power axis, one currency.** Hero Level + AP loadouts is the only across-run power progression; Glory buys cosmetics only. Runeshards/Mastery Rank were removed (2026-09-29 merge) — don't reintroduce a second power currency or pool gate without reopening `architecture.md` §6/§13.
 - **v1.0 non-goals hold:** no multiplayer, no console ports, no mod support, no narrative, no hand-crafted level layouts. (`architecture.md` §12)
 - **Phases are scope-gated, not date-gated.** A phase ends when its Definition of Done is true, not when a calendar says so. Sprint 0.1 was a hard go/no-go checkpoint — resolved with a go (see `worklog.md`). (`sprint-roadmap.md` §1, §3)
 

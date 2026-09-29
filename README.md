@@ -1,6 +1,6 @@
 # OVERSIZED
 
-A 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7** (GDScript). One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves; run-scoped Sword Upgrades plus a permanently-growing pool of auto-casting Universal Abilities.
+A 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7** (GDScript). One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves; run-scoped Sword Upgrades plus a persistent **Hero Level** that grows your roster of auto-casting Universal Abilities and passives — and your loadout budget, with a tag-driven synergy system tying it all together.
 
 **Status:** Pre-production — Sprint 1.1 (wave loop + Sword Upgrade picks).
 

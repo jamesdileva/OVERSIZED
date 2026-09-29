@@ -13,7 +13,7 @@ Read this one first. It's the shared vocabulary the other two lean on.
 
 ## 1. Concept Summary
 
-A single hero wields one absurdly oversized sword that never stops swinging. Enemies arrive endlessly and in real numbers — this isn't a trickle, it's a flood. Every ten waves, a boss with its own unique attack kit interrupts the flow. Two independent progression tracks layer on top: the sword itself gets rebuilt every single run (pure roguelite, resets to zero each time), while a separate pool of auto-casting "Universal Abilities" grows *permanently* the more you play, so a level-up screen on run #50 offers wildly more (and wilder) options than it did on run #1. Cosmetics — skins for the hero and, especially, increasingly ridiculous swords — are earned through play and carry zero combat power.
+A single hero wields one absurdly oversized sword that never stops swinging. Enemies arrive endlessly and in real numbers — this isn't a trickle, it's a flood. Every ten waves, a boss with its own unique attack kit interrupts the flow. Two independent progression tracks layer on top: the sword itself gets rebuilt every single run (pure roguelite, resets to zero each time), while your permanently-owned roster of Universal Abilities and passives grows the more you play — and a loadout system makes you choose which ones you bring, so a run at Hero Level 30 is a different shape than one at Hero Level 5. Cosmetics — skins for the hero and, especially, increasingly ridiculous swords — are earned through play and carry zero combat power.
 
 Genre-wise this sits in **Bullet Heaven / Survivors-like**, but as a melee-first variant — most games in the genre (Vampire Survivors, Brotato) are ranged-auto-attack; a permanently-swinging oversized melee weapon as the core identity is a real point of differentiation, not just a reskin.
 
@@ -34,9 +34,9 @@ The takeaway: the genre rewards a tight, legible core loop and a strong visual h
 These are the things every feature decision should be checked against.
 
 1. **One hero, one (ridiculous) weapon.** The sword *is* the character concept. Everything about its presentation — size, swing weight, screen-shake, the sheer absurdity of a person dragging something that big — is doing marketing and game-feel work simultaneously.
-2. **Two build axes that don't fight each other.** The sword resets every run (tension, variety, "did I get a good roll this time"). Universal Abilities are the long-term power fantasy (mastery, permanence, "I've unlocked so much"). Keeping them mechanically separate is what lets both feel good at once — see Section 6.
+2. **Two build axes that don't fight each other.** The sword resets every run (tension, variety, "did I get a good roll this time"). Universal Abilities and passives are the long-term power fantasy (ownership, loadout-building, permanence). Keeping them mechanically separate is what lets both feel good at once — see Section 6.
 3. **Number go up, screen goes chaos.** The genre's core pleasure is escalating from fragile to absurd within one run. Enemy density should visibly overwhelm the screen; the sword and abilities should visibly trivialize that density by the run's back half.
-4. **Cosmetics are bragging rights, not power.** No cosmetic item may carry a stat. This is a hard rule, not a guideline — see Section 7 and the corresponding implementation note.
+4. **Cosmetics are bragging rights, not power.** No cosmetic item may carry a stat. This is a hard rule, not a guideline — see Section 6 and the corresponding implementation note.
 
 ## 4. Core Loop
 
@@ -45,7 +45,7 @@ flowchart TD
     Menu[Main Menu] --> Start[Start Run]
     Start --> Wave[Wave N Combat]
     Wave --> Died{Player Died?}
-    Died -- Yes --> Summary[Run Summary: earn Runeshards + Glory]
+    Died -- Yes --> Summary[Run Summary: earn Hero XP + Glory]
     Died -- No --> Cleared{Wave Timer Elapsed / Boss Defeated?}
     Cleared -- No --> Wave
     Cleared -- Yes --> IsBoss{Wave is a multiple of 10?}
@@ -58,7 +58,7 @@ flowchart TD
     LevelCheck -- Yes --> AbilityPick[Universal Ability Choice]
     AbilityPick --> Wave
     LevelCheck -- No --> Wave
-    Summary --> Hub[Meta Hub: spend Runeshards on Mastery, Glory on Cosmetics]
+    Summary --> Hub[Meta Hub: manage loadout, spend Glory on Cosmetics]
     Hub --> Menu
 ```
 
@@ -84,42 +84,105 @@ The sword's baseline behavior: swing, brief recovery, swing again — no cooldow
 
 Because this pool is fully reset each run, it's the primary source of "this run feels completely different from last run" — the roguelite promise.
 
-### 5.2 Universal Abilities (level-scoped in-run, unlocked permanently via meta-progression)
+### 5.2 Universal Abilities & passives (run-scoped play, owned permanently)
 
-Separate from the sword entirely: auto-casting effects with their own internal cooldown timers (an orbiting flame ring, a periodic ground-slam shockwave, a homing spirit blade) — "auto cast" means exactly that, no player input ever triggers them directly.
+Two kinds, and both are auto-cast — no player input path exists for either:
 
-**Character Level** rises from in-run XP (kills drop XP, same convention as the rest of the genre) and resets every run. Each level-up offers 2-4 Universal Ability choices — new ability, or a rank-up of one already taken.
+- **Actives** — auto-casting abilities with their own cooldown timers or persistent effects (an orbiting flame ring, a periodic ground-slam shockwave, a homing spirit blade). AP cost 2–5: light utility = 2, standard = 3, strong = 4, build-defining = 5.
+- **Passives** — always-on effects with no cooldown and no cast. They cover character stats (max HP, regen, move speed, pickup radius, XP gain, armor) and tag amplifiers ("+25% Fire damage"). AP cost 1–3, averaging ~2. Passives stay off the sword's turf: sword shape, reach, and on-hit effects belong to Sword Upgrades; passives modify the *character* and the *tag economy* (Section 5.4).
 
-The permanence lives one layer up, in **Mastery Rank** — see Section 6. Mastery Rank doesn't touch the current run directly; it controls how big and how strong the *pool* is that level-up screens draw from. A player at Mastery Rank 1 sees a handful of basic options at every level-up. A player at Mastery Rank 40 sees a much deeper, higher-rarity-ceiling pool — more experimentation, more room to find something absurd. This is the direct mechanical answer to "as you get higher level, experimentation becomes more and more, as well as more OP."
+Three layers, from permanent to per-run:
+
+| Layer | Scope | What it controls |
+|---|---|---|
+| **Hero Level** | Persistent, account-wide | Which abilities you *own*, and how many **AP** you have |
+| **Loadout** | Chosen in the hub before each run | Which owned abilities you *bring*, within your AP budget |
+| **Character Level** | Resets every run | Which of your equipped abilities come online / rank up during the run |
+
+- **Hero Level** rises from XP earned across runs (scaled to waves survived, kills, bosses). It unlocks abilities at defined levels (`roster_unlocks` in a data-driven `ProgressionCurve` — not every level unlocks something; AP-only levels still pay out) and grows the **AP budget**. AP cost is fixed regardless of rank — ranks are run-scoped, so charging AP for them would double-tax.
+- **The budget grows slower than the roster**, so the choice tightens as you progress: early you bring everything you own; later you own more than you can equip, and *building the loadout becomes the game before the game*.
+
+| Hero Level | Owned (actives+passives) | AP budget | Roughly equippable |
+|---|---|---|---|
+| 1 | 2 | 5 | all |
+| 10 | 5 (3+2) | 14 | all 5 |
+| 20 | 10 (6+4) | 24 | ~8 of 10 |
+| 30 | 14 (9+5) | 31 | ~10 of 14 |
+| 50 | 24 (15+9) | 36 | 12 (slot cap) |
+
+- **Loadout rules**: hard cap of 12 equipped slots regardless of AP (bounds UI complexity and the per-frame ability-update cost); free, instant respec (trying on builds, not committing); 3–5 saved named presets, because synergy builds (Section 5.4) are hard to reassemble by hand. The whole curve is a `ProgressionCurve` resource — retuning progression is a spreadsheet edit, not code (see `implementation-guide.md` §3).
+- **In-run level-up cards draw from the equipped loadout only**: bring an equipped-but-inactive active online at rank 1, or rank up an active (max rank 5) or a passive (max rank 3, smaller steps). One **opening ability** starts each run online (2 at Hero Level 20+ — tuning knob); **passives are on from run start** at rank 1, no card needed. A per-run allotment of 2 rerolls and 1 banish (banish removes a card from this run's offers) is the player's tool for steering toward a synergy.
+- **The consequence for pool size**: your equipped loadout *is* the level-up pool. A level-30 player with 10 equipped abilities sees materially more variety at each level-up than a level-10 player with 5 — the same "as you level, experimentation grows and gets more OP" promise, now with a hard lever behind it.
+- **Unlock sources**: primarily Hero Level (suggested mix ~60% actives / ~40% passives — passives need an icon and no bespoke VFX, making them the cheap roster lever if production falls behind). Secondarily, a handful of "trophy" abilities unlocked by first-time boss kills, giving late-game players a reason to chase specific fights. Roster math: ~24 level-gated abilities by level 50 plus 6–8 trophies ≈ the 30–32 total the original budget targeted.
+
+The permanence design replaces the earlier "Mastery Rank / Runeshards" model (merged from the systems deep-dive, 2026-09-29): one persistent power axis (Hero Level + AP) and one currency (Glory, cosmetics only) — see Section 6.
 
 ### 5.3 Why keep them separate
 
-If both tracks reset per run, there's no long-term progression hook. If both persist across runs, the roguelite tension disappears (every run starts strong, nothing to lose). Splitting them lets each track do one job well: Sword Upgrades supply *within-run* variance and tension; the Universal Ability pool (gated by Mastery Rank) supplies *across-run* growth and the "I've unlocked so much" feeling that keeps players coming back after a bad run.
+If both tracks reset per run, there's no long-term progression hook. If both persist across runs, the roguelite tension disappears (every run starts strong, nothing to lose). Splitting them lets each track do one job well: Sword Upgrades supply *within-run* variance and tension; the owned-but-not-equipped loadout gap (Hero Level + AP budget) supplies *across-run* growth and the "I've unlocked so much" feeling that keeps players coming back after a bad run.
+
+### 5.4 The Synergy System — tags, reactions, resonance, evolutions
+
+A bigger ability pool alone just means more things that each work in isolation. Experimentation only becomes *fun* when picks interact — when taking a fire sword upgrade changes what your ground slam does. The mechanism is **tags**, and the two build tracks share one vocabulary so they can talk to each other.
+
+**Tag taxonomy (starting set, ~20):**
+
+| Group | Tags | Purpose |
+|---|---|---|
+| **Element** | Fire, Frost, Shock, Poison, Blood | What flavor of damage/status something carries |
+| **Delivery** | Slash, Orbit, Burst, Projectile, Summon, Zone | *How* it reaches enemies |
+| **Status** | Burn, Chill, Shocked, Poisoned, Bleed, Stun | Applied conditions on enemies (Fire→Burn, Frost→Chill, …) |
+| **Behavior** | OnHit, OnKill, Periodic, Crit, Lifesteal, Knockback, Execute | When/why an effect fires |
+
+Every `SwordUpgradeDef` and `UniversalAbilityDef` carries a tag set (stored as a bitmask — implementation in `implementation-guide.md` §3). Everything that deals damage emits one hit event through the single damage pipeline (§7) carrying `{source_id, tag_mask, base_damage, is_crit, position, target_index}`; everything that reacts subscribes via the `EventBus` and filters by mask — no ability needs to know any other ability exists. Statuses on enemies are horde-safe flat arrays (`status_mask` + per-status timers in the sim layer — `implementation-guide.md` §6), not child nodes.
+
+**Four mechanisms, in build order:**
+
+1. **Tag amplifiers** — the baseline. "+25% Fire damage" applies to any source carrying Fire, sword infusion or flame ring alike. Passives are the natural home: a 2-AP amplifier passive rewards committing to a theme, and conditionals like "Burning enemies take extra Slash damage" tie the sword's hits into your ability loadout.
+2. **Reactions** — two statuses meeting produce a new effect. Starting set:
+
+| Reaction | Trigger | Effect |
+|---|---|---|
+| **Steam Burst** | Burning enemy takes a Frost hit (or vice versa) | Small AoE burst around the target |
+| **Shatter** | Max-Chill enemy takes a heavy Slash hit | Bonus damage + guaranteed crit |
+| **Contagion** | Poisoned enemy takes a Shock hit | Poison spreads to nearby enemies |
+| **Blood Boil** | Bleeding enemy dies while Burning | Explodes, dealing AoE Fire damage |
+| **Overload** | Shocked enemy hit by an Orbit source | Chain arc to 2 nearby enemies |
+
+3. **Resonance** — a *loadout-level* bonus for committing to a theme: equip 3+ abilities sharing a tag for a tier-1 bonus, 5+ for tier-2 (e.g., "Pyre Resonance: Burn spreads to adjacent enemies on kill"). This is where AP and synergy meet — a themed loadout spends limited AP on *coherence* rather than raw ability count.
+4. **Evolutions** — the genre's classic payoff: a specific ability at max rank plus a specific Sword Upgrade transforms into a stronger evolved form. Data-driven (`EvolutionDef { ability_id, requires_upgrade_id, result_id }`); show a recipe hint in the UI once discovered so the chase is visible. Target ~3 for EA, 6–8 for 1.0.
+
+**Damage math and guardrails** (chain reactions are the whole appeal, so runaway procs are the whole risk):
+
+- Two modifier categories, standard ARPG convention: `final = base × (1 + Σ increased) × Π more`. **Increased** is additive within its pool (most amplifiers — safe, hard to break); **More** is multiplicative, rare, and each source is deliberate. Cap how many "More" sources stack.
+- **Proc depth limit of 2** — a reaction can trigger another reaction once, then stops.
+- **Internal cooldowns** on OnHit/OnKill effects, so 300 enemies dying in one frame can't fire 300 explosions.
+- **Proc coefficient** — hits from abilities/reactions trigger further effects at reduced rate (~0.5) versus direct sword hits.
+- **Global effect budget** — cap simultaneous spawned effects, enforced by the same pooling layer as enemies.
+
+**Offer weighting**: level-up and wave-clear cards get a mild synergy bias — multiply a card's weight by `1 + 0.25 × (matching active tags)`, capped. The game feels like it's helping you build something without becoming deterministic; rerolls and banishes are the player's corrective tools.
+
+**Content rules**: coverage rule for 1.0 — every tag has ≥3 producers and ≥2 consumers (a tag nothing reacts to is dead weight); maintain a synergy matrix (spreadsheet: rows = abilities/upgrades, columns = tags, produce/consume) checked at each content-sprint boundary; an editor validation script loads all content `.tres` and fails on unknown tags, orphaned evolution recipes, or zero-consumer tags. Design toward at least six viable archetypes, each assemblable inside a level-20 AP budget (≤24): **Pyre** (Fire/Burn/Burst — everything's on fire and it spreads), **Blood Knight** (Blood/Bleed/Lifesteal/Crit — trade risk for sustain and spikes), **Storm** (Shock/Orbit/Periodic — chain lightning and a whirling ring), **Frostbite** (Frost/Chill/Slash — freeze the crowd, shatter it with the sword), **Swarm** (Summon/OnKill — kills feed an ever-growing army), **Juggernaut** (Slash/Knockback/Execute — pure sword: bigger, heavier, harder). If an archetype can't be assembled inside the level-20 budget, the costs or unlock levels are wrong — a useful automated balance check.
 
 ## 6. Progression & Economy Model
 
-| | Character Level | Mastery Rank |
-|---|---|---|
-| Scope | Resets every run | Persistent, account-wide |
-| Driven by | XP from kills, this run only | Runeshards spent (earned per run) |
-| Effect | Triggers a Universal Ability offer | Expands the pool size, rarity ceiling, and ability-slot cap available *at* level-up |
+Power progression has exactly one persistent axis — **Hero Level** (unlocks + AP budget, Section 5.2) — and exactly **one currency**:
 
-Two currencies, kept deliberately separate so a player is never forced to choose between "get stronger" and "look cool":
+- **Glory** — earned per run (scaled to waves survived, kills, bosses — and later to style axes like no-hit streaks or challenge completions if useful). Spent only on cosmetics. The old second currency (Runeshards → Mastery Rank) was removed in the deep-dive merge (2026-09-29): Hero Level already provides the across-run power hook, and a single "get stronger by playing / look cool with Glory" split means a player is never asked to choose between power and looks with the same wallet. Revisit only if a second sink is ever genuinely needed (open decision, Section 13).
 
-- **Runeshards** — earned per run (scaled to wave reached, bosses beaten). Spent only on Mastery Rank unlocks (new Universal Abilities entering the pool, higher rarity tiers, extra ability slots).
-- **Glory** — earned per run (scaled to a different axis — style points, no-hit streaks, challenge completions, whatever fits later). Spent only on cosmetics.
+**Staged content budget** — tying content tiers to the Hero Level cap lets the game ship in honest tiers instead of all-or-nothing. These replace the earlier flat v1.0 budget; the 1.0 column is a post-EA target, not a launch gate:
 
-### Suggested content budget (v1.0 targets)
+| Content | Demo (cap 20) | Early Access (cap 30) | 1.0 (cap 50) |
+|---|---|---|---|
+| Universal Abilities owned (active+passive) | 10 (6+4) | 14 (9+5), plus trophy abilities | ~24 (15+9), plus trophy abilities |
+| Sword Upgrades | 12 | 20 | 24-30 |
+| Base enemy types | 8-10 | 15 | 20 |
+| Hand-authored bosses | 2 (waves 10, 20) | 4 (waves 10-40) | 6-8 |
+| Evolutions | 1 | 3 | 6-8 |
+| Cosmetic sets | 3 | 6 | 8-12 |
+| Music tracks | 3-4 | 5-6 | 8+ |
 
-Not commitments — starting targets so the roadmap has real numbers to schedule against.
-
-| Content type | v1.0 target | Note |
-|---|---|---|
-| Sword Upgrades | 24-30 | Enough for run-to-run variety without a bloated choice screen |
-| Universal Abilities | 25-35 (3-5 ranks each) | Full pool unlocks gradually via Mastery Rank, not all available day one |
-| Base enemy types | 15-20 | Stat/behavior variants (fast, armored, ranged, explosive-on-death) stretch this further without new art |
-| Hand-authored bosses | 6-8 (waves 10 through ~80) | Beyond that, "Champion" modifier stacking reuses the roster — see Section 9 |
-| Cosmetic sets | 8-12 at launch | Hero skin + matching sword skin bundled as one unlock, so the sword's silhouette keeps evolving |
+A demo capped at Hero Level 20 is also a good pitch: it shows the "you can bring most but not all" AP crunch — the system's best selling point — within a slice players can actually finish.
 
 ## 7. Systems Architecture
 
@@ -132,22 +195,22 @@ graph LR
     subgraph Combat
         PC[Player Controller]
         SW[Sword Component]
-        DMG[Damage Pipeline]
+        DMG[Damage Pipeline + Tags]
     end
     subgraph Enemies
         WD[Wave Director]
-        POOL[Enemy Pool]
+        POOL[Enemy Pool + Statuses]
         BOSS[Boss Controller]
     end
     subgraph Progression
-        LVL[Level / XP]
+        LVL[Character Level / XP]
         SPICK[Sword Upgrade Picker]
-        APICK[Universal Ability Picker]
+        APICK[Ability Picker from Loadout]
     end
     subgraph Meta
         SAVE[Save System]
-        MASTERY[Mastery Rank]
-        CURR[Currencies]
+        HL[Hero Level + AP]
+        GLORY[Glory]
     end
     subgraph Presentation
         HUD[HUD / Choice Screens]
@@ -170,10 +233,10 @@ graph LR
     LVL --> APICK
     SPICK --> SW
     APICK --> PC
-    SAVE --> MASTERY
-    SAVE --> CURR
-    MASTERY --> APICK
-    CURR --> COSM
+    SAVE --> HL
+    SAVE --> GLORY
+    HL --> APICK
+    GLORY --> COSM
     COSM --> PC
     HUD --> SPICK
     HUD --> APICK
@@ -181,25 +244,27 @@ graph LR
 
 Module responsibilities, briefly:
 
-- **GameManager / EventBus** — owns the state machine (Menu → Run → Summary → Hub) and a central signal bus so combat, progression, and UI don't hold direct references to each other.
-- **Combat** — player movement (including the confirmed no-cooldown dash — `implementation-guide.md` Section 1), the sword's swing state machine, and the damage pipeline everything routes through (so crits, elemental effects, and lifesteal all have one place to hook in).
-- **Enemies** — a wave director that reads data-driven wave definitions, an object pool (never `instantiate()` mid-combat), and a boss controller with its own telegraphed-attack state machine.
-- **Progression** — XP/leveling and the two choice-screen pickers, each pulling from a different pool (run-local for sword, Mastery-gated for abilities).
-- **Meta** — the save file, Mastery Rank logic, and the two currencies. This is the only system that persists across runs.
+- **GameManager / EventBus** — owns the state machine (Menu → Run → Summary → Hub) and a central signal bus so combat, progression, and UI don't hold direct references to each other. Reactions and synergy triggers also subscribe here, filtering hit events by tag mask (§5.4).
+- **Combat** — player movement (including the confirmed no-cooldown dash — `implementation-guide.md` Section 1), the sword's swing state machine, and the damage pipeline everything routes through (so crits, elemental effects, and lifesteal all have one place to hook in). Every hit event carries a tag bitmask (§5.4).
+- **Enemies** — a wave director that reads data-driven wave definitions, an object pool (never `instantiate()` mid-combat) with flat-array status storage, and a boss controller with its own telegraphed-attack state machine.
+- **Progression** — in-run XP/leveling and the two choice-screen pickers, each pulling from a different source (run-local pool for sword picks, the equipped loadout for ability picks).
+- **Meta** — the save file, Hero Level + AP/loadout state, and Glory. This is the only system that persists across runs.
 - **Presentation** — HUD, the shared choice-screen component, cosmetics application, and the horde-rendering layer (kept separate from enemy *logic* — see Section 10).
 
 ## 8. Data Model Overview
 
 Conceptual shapes, not code (that's `implementation-guide.md`'s job) — but pinning down what fields matter now avoids rework later.
 
-- **SwordUpgradeDef** — id, display name/icon, effect type (stat mod / on-hit effect / passive), magnitude, rarity weight, stacking rule.
-- **UniversalAbilityDef** — id, display name/icon, cooldown, effect payload, max rank, per-rank scaling curve, Mastery Rank required to enter the pool.
-- **EnemyDef** — id, base stats, movement behavior tag, spawn weight curve (by wave number), on-death effects.
+- **SwordUpgradeDef** — id, display name/icon, effect type (stat mod / on-hit effect / passive), magnitude, rarity weight, stacking rule, tag set (§5.4).
+- **UniversalAbilityDef** — id, display name/icon, `kind` (active / passive — passives have no cooldown and are on from run start), cooldown (actives), effect payload, `ap_cost` (actives 2–5, passives 1–3), `max_rank` (5 actives / 3 passives), `unlock_level`, tag set (§5.4).
+- **ProgressionCurveDef** — `xp_required[level]`, `ap_budget[level]`, `slot_cap` (12), `roster_unlocks[level] → ability ids`. The entire progression feel in one data file.
+- **EvolutionDef** — `ability_id`, `requires_upgrade_id`, `result_id`. The synergy payoff (§5.4).
+- **EnemyDef** — id, base stats, movement behavior tag, spawn weight curve (by wave number), on-death effects, tag set.
 - **WaveDef** — wave number, duration, enemy spawn budget/composition, boss reference (if applicable).
 - **BossDef** — id, HP, phase thresholds, list of attack-pattern states, Champion-modifier compatibility flags (see Section 9).
 - **CosmeticItemDef** — id, slot (hero skin / sword skin / trail / victory pose), Glory cost, unlock condition. Deliberately **has no stat fields at all** — see Section 6's hard rule.
-- **RunState** (in-memory only) — current wave, HP, XP/level, active Sword Upgrades, active Universal Abilities, run-scoped stats.
-- **MetaProgressionSave** (persisted) — Mastery Rank, Runeshards, Glory, unlocked ability-pool entries, unlocked/equipped cosmetics, best-wave-reached and other stat tracking.
+- **RunState** (in-memory only) — current wave, HP, XP/character level, active loadout ranks, active Sword Upgrades, run-scoped stats.
+- **MetaProgressionSave** (persisted) — `hero_xp`, `hero_level`, `loadouts` (named ability-id sets) + `last_loadout_index`, unlocked abilities, Glory, unlocked/equipped cosmetics, best-wave-reached and other stat tracking. Carries `schema_version` from the very first file (`implementation-guide.md` §10) — the Mastery-Rank→Hero-Level change is exactly the migration scenario that field exists for.
 
 ## 9. Handling "Infinite" Enemies and Bosses
 
@@ -241,6 +306,22 @@ Stated plainly so anything here can be corrected without derailing the rest of t
 - Visual style: **2D top-down**, not 3D. (Reasoning: closest precedent — Brotato — is 2D; a comically oversized weapon reads *more* clearly as a 2D silhouette gag; cheaper to produce for a small team.)
 - Engine: **Godot 4.7**, GDScript-first.
 - Platform: **PC / Steam**, single-player, premium one-time purchase (no free-to-play, no real-money cosmetic shop — cosmetics are earned through play only, matching every precedent cited above).
-- Team size / pace: **not specified** — `sprint-roadmap.md` gives dual estimates (solo/duo part-time, and full-time solo-or-small-team) rather than assuming one.
+- Economy (settled 2026-09-29, systems deep-dive merge): **one persistent power axis** (Hero Level + AP loadouts) and **one currency** (Glory, cosmetics only). Runeshards/Mastery Rank were removed; revisit only if a second sink is genuinely needed.
+- Art (settled 2026-09-29): **pixel art, no commissions** — self-made plus licensed/CC0 packs, unified by palette (see `implementation-guide.md` §16). Base resolution recommended **640×360** (integer-scales to 1080p/1440p/4K); decide by end of Phase 1.
+- Team size / pace: **two people, no calendar commitments** — phases are scope-gated (`sprint-roadmap.md` §1). All effort figures in the docs are planning guesses to be re-measured, not data.
 - Working title: **"Oversized"** — a placeholder, not a proposal to be attached to.
 - One hero at launch, with additional heroes/weapons treated as a realistic post-launch content axis rather than a v1.0 requirement.
+
+### Open decisions (defaults chosen; revisit when the trigger says so)
+
+| # | Decision | Default | Revisit when |
+|---|---|---|---|
+| 1 | Runeshards removed for v1? | Yes | A second sink is genuinely needed |
+| 2 | Hero Level cap 50, roster ~24 + trophies | Yes | Playtest shows pacing off |
+| 3 | Trophy (boss-kill) abilities | Yes, a few | — |
+| 4 | Opening kit: 1 ability, 2 at Hero Level 20+ | Yes | Playtest |
+| 5 | Base resolution 640×360 | Yes | Decide by end of Phase 1 |
+| 6 | No commissions; self + licensed packs | Yes | The Sprint 2.3 art timing exercise says otherwise |
+| 7 | Layered music via `AudioStreamInteractive`/`Synchronized` | Yes | Verify exact API in 4.7 docs before building |
+| 8 | Passives share the 12-slot cap with actives | Yes | If passives crowd out actives |
+| 9 | Passives rank up in-run, max 3 | Yes | Playtest |
