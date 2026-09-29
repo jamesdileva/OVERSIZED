@@ -9,6 +9,7 @@ var failures := 0
 
 func _initialize() -> void:
 	seed(20260928)
+	_test_scripts_compile()
 	_test_pool_basics()
 	_test_pool_swap_remove_integrity()
 	_test_hash_matches_bruteforce()
@@ -20,6 +21,12 @@ func _initialize() -> void:
 	_test_sword_swing_window()
 	_test_hash_circle_candidates_superset()
 	_test_sim_damage_and_death()
+	_test_upgrade_defs_load()
+	_test_roll_offers()
+	_test_wave_director()
+	_test_combo_counter()
+	_test_spin_swing()
+	_test_upgrade_effects_apply()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -35,6 +42,36 @@ func check(cond: bool, label: String) -> void:
 	else:
 		failures += 1
 		print("  FAIL  " + label)
+
+
+## A script with a parse error aborts any test that touches its class
+## silently — the suite would still print PASSED. So first verify every
+## critical script compiles, as checks (a broken script = visible FAIL).
+func _test_scripts_compile() -> void:
+	print("scripts: all critical scripts compile")
+	var paths := [
+		"res://scripts/horde/spatial_hash.gd",
+		"res://scripts/horde/horde_sim.gd",
+		"res://scripts/horde/horde_renderer.gd",
+		"res://scripts/combat/sword_swing.gd",
+		"res://scripts/combat/combo_counter.gd",
+		"res://scripts/combat/upgrade_effects.gd",
+		"res://scenes/run/wave_director/wave_director.gd",
+		"res://scenes/run/player/player.gd",
+		"res://scenes/run/player/sword.gd",
+		"res://scenes/run/run.gd",
+		"res://scenes/run/camera_rig.gd",
+		"res://scenes/run/damage_numbers.gd",
+		"res://scenes/run/burst_ring.gd",
+		"res://scenes/run/stress_test.gd",
+		"res://scenes/ui/choice_screen/choice_screen.gd",
+		"res://autoload/content_loader.gd",
+		"res://autoload/event_bus.gd",
+		"res://autoload/debug_console.gd",
+	]
+	for p in paths:
+		var s = load(p)
+		check(s != null and s.can_instantiate(), "script compiles: " + p)
 
 
 func _test_pool_basics() -> void:
@@ -260,3 +297,162 @@ func _test_sim_damage_and_death() -> void:
 	sim.damage(-5, 1.0, Vector2.ZERO)
 	sim.damage(99, 1.0, Vector2.ZERO)
 	check(sim.active_count == 0, "out-of-range damage is ignored")
+
+
+func _make_upgrade(id: StringName, weight := 1.0, max_stacks := 0) -> SwordUpgradeDef:
+	var d := SwordUpgradeDef.new()
+	d.id = id
+	d.display_name = String(id)
+	d.description = "test"
+	d.effect_id = id
+	d.rarity_weight = weight
+	d.max_stacks = max_stacks
+	return d
+
+
+func _test_upgrade_defs_load() -> void:
+	print("content: .tres upgrade + wave defs load")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	check(loader.sword_upgrades.size() >= 8, "at least 8 sword upgrade .tres files load (got %d)" % loader.sword_upgrades.size())
+	check(loader.waves.size() >= 5, "at least 5 wave .tres files load (got %d)" % loader.waves.size())
+	var sane := true
+	for w in loader.waves:
+		if w.duration <= 0.0 or w.spawns_per_second <= 0.0:
+			sane = false
+	check(sane, "wave defs have sane duration/spawn rates")
+	var sorted := true
+	for k in range(1, loader.waves.size()):
+		if loader.waves[k].number < loader.waves[k - 1].number:
+			sorted = false
+	check(sorted, "wave defs sorted by number")
+
+
+func _test_roll_offers() -> void:
+	print("choice offers: distinct, excludes maxed, degrades gracefully")
+	var pool := [
+		_make_upgrade(&"a"), _make_upgrade(&"b"), _make_upgrade(&"c"),
+		_make_upgrade(&"d", 1.0, 1),
+	]
+	var offers := UpgradeEffects.roll_upgrade_offers(pool, {&"d": 1}, 3)
+	check(offers.size() == 3, "3 offers from pool of 4 (one maxed)")
+	var distinct := {}
+	for o in offers:
+		distinct[o.id] = true
+	check(distinct.size() == offers.size(), "offers are distinct")
+	var no_max := true
+	for o in offers:
+		if o.id == &"d":
+			no_max = false
+	check(no_max, "maxed upgrade never offered")
+	var small := UpgradeEffects.roll_upgrade_offers([_make_upgrade(&"x"), _make_upgrade(&"y")], {}, 3)
+	check(small.size() == 2, "pool smaller than count returns the whole pool")
+
+
+func _test_wave_director() -> void:
+	print("wave director: timing, clears, endless scaling")
+	var w1 := WaveDef.new()
+	w1.number = 1
+	w1.duration = 1.0
+	w1.spawns_per_second = 30.0
+	w1.max_alive = 50
+	var w2 := WaveDef.new()
+	w2.number = 2
+	w2.duration = 2.0
+	w2.spawns_per_second = 5.0
+	w2.max_alive = 50
+	var d := WaveDirector.new()
+	d.start([w1, w2])
+	check(d.wave_number == 1 and d.current == w1, "starts on wave 1")
+	var spawned := 0
+	for f in 30:
+		spawned += d.tick(1.0 / 30.0)
+	check(spawned == 30, "spawn budget accumulates to rate * dt (30 spawns in 1s at 30/s)")
+	for f in 5:
+		d.tick(1.0 / 30.0)  # a tick or two past nominal: float64 drift means the
+	check(d.is_cleared(), "wave 1 cleared when its timer elapses")  # crossing lands on the next frame
+	d.advance()
+	check(d.wave_number == 2 and d.current == w2, "advance moves to wave 2")
+	check(not d.is_cleared(), "wave 2 not cleared immediately")
+	for f in 61:
+		d.tick(1.0 / 30.0)
+	check(d.is_cleared(), "wave 2 clears after its own duration")
+	d.advance()
+	var w3: WaveDef = d.current
+	check(d.wave_number == 3 and w3 != w2, "wave 3 scales beyond the authored defs")
+	check(w3.spawns_per_second > w2.spawns_per_second and w3.health_scale > w2.health_scale,
+			"scaled wave is denser and tougher")
+
+
+func _test_combo_counter() -> void:
+	print("combo counter: threshold burst, whiff reset")
+	var c := ComboCounter.new()
+	c.threshold = 15
+	var bursted := false
+	for k in 14:
+		if c.register_hits(1):
+			bursted = true
+	check(not bursted and c.hits == 14, "14 hits below threshold: no burst")
+	bursted = c.register_hits(1)
+	check(bursted and c.hits == 0, "15th hit bursts and resets the count")
+	for k in 10:
+		c.register_hits(1)
+	c.register_swing(0)
+	check(c.hits == 0, "a whiff swing resets the count")
+	var off := ComboCounter.new()
+	check(not off.register_hits(5), "threshold 0 never bursts (no combo upgrade owned)")
+
+
+func _test_spin_swing() -> void:
+	print("sword swing: spin finisher every Nth sweep")
+	var s := SwordSwing.new()
+	s.spin_every = 4
+	s.start(0.0)
+	var ok := true
+	for f in 2400:
+		s.advance(1.0 / 60.0)
+		if s.swing_just_started:
+			var expected := s.swing_index % 4 == 0
+			if s.is_spin_swing() != expected:
+				ok = false
+			if s.is_spin_swing() and not is_equal_approx(s.current_arc_half(), PI):
+				ok = false
+	check(ok, "every 4th swing spins (arc_half = PI), others keep the tuned arc")
+
+
+func _test_upgrade_effects_apply() -> void:
+	print("upgrade effects: apply mutates sword/sim state")
+	var sword := Sword.new()
+	var sim := HordeSim.new(16)
+	var run := {"leech_on_kill": 0.0}
+	var ctx := {"sword": sword, "sim": sim, "player": null, "run": run}
+	var reach := _make_upgrade(&"reach_up")
+	reach.magnitude = 25.0
+	UpgradeEffects.apply(reach, ctx)
+	check(sword.reach == 155.0 + 25.0, "reach_up adds reach")
+	var heavy := _make_upgrade(&"heavy_blade")
+	heavy.magnitude = 6.0
+	UpgradeEffects.apply(heavy, ctx)
+	check(sword.damage == 12.0 + 6.0, "heavy_blade adds damage")
+	var swift := _make_upgrade(&"swift_strikes")
+	swift.magnitude = 0.12
+	UpgradeEffects.apply(swift, ctx)
+	check(sword.swing.windup_time < 0.13 and sword.swing.recovery_time < 0.17,
+			"swift_strikes shortens windup and recovery")
+	var spin := _make_upgrade(&"spin_finisher")
+	spin.magnitude = 4.0
+	UpgradeEffects.apply(spin, ctx)
+	check(sword.swing.spin_every == 4, "spin_finisher sets the spin cadence")
+	var burst := _make_upgrade(&"combo_burst")
+	burst.magnitude = 15.0
+	UpgradeEffects.apply(burst, ctx)
+	check(sword.combo.threshold == 15, "combo_burst sets the combo threshold")
+	var mom := _make_upgrade(&"momentum")
+	mom.magnitude = 0.5
+	UpgradeEffects.apply(mom, ctx)
+	check(sim.knockback_impulse > 240.0, "momentum scales knockback")
+	var leech := _make_upgrade(&"leech")
+	leech.magnitude = 2.0
+	UpgradeEffects.apply(leech, ctx)
+	check(run["leech_on_kill"] == 2.0, "leech registers on the run context")
+	sword.free()

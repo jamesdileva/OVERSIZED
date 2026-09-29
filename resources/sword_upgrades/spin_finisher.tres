@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SwordUpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/sword_upgrade_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"spin_finisher"
+display_name = "Spin Finisher"
+description = "Every 4th swing sweeps a full 360°. All around you. Stacks shorten the cadence."
+effect_type = "passive"
+effect_id = &"spin_finisher"
+magnitude = 4.0
+rarity_weight = 0.6
+max_stacks = 3

@@ -17,6 +17,8 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 DebugConsole="*res://autoload/debug_console.gd"
+EventBus="*res://autoload/event_bus.gd"
+ContentLoader="*res://autoload/content_loader.gd"
 
 [display]
 

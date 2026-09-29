@@ -7,18 +7,23 @@ extends Node2D
 ## around the hero, then exact reach + sweep-window tests (§5.2's hash-based
 ## approach). One hit per enemy per swing, tracked by pool slot. The blade is
 ## placeholder custom drawing until real art lands.
+##
+## Upgrades mutate the exposed knobs (reach, damage, swing timings via
+## UpgradeEffects); the combo counter feeds Combo Burst / spin upgrades.
 
-const REACH := 155.0
-const DAMAGE := 12.0
+signal combo_burst(center: Vector2)
+
 const AIM_RANGE := 620.0
 
+var reach := 155.0
+var damage := 12.0
 var swing := SwordSwing.new()
+var combo := ComboCounter.new()
 
 var _sim: HordeSim
 var _on_hit: Callable
-# PackedByteArray, not PackedBoolArray — PackedBoolArray does not exist in
-# 4.7.2's GDScript (parse error), byte flags are the drop-in replacement
 var _hit_flags: PackedByteArray = PackedByteArray()
+var _hits_this_swing := 0
 
 
 func setup(sim: HordeSim, on_hit: Callable) -> void:
@@ -33,8 +38,12 @@ func _physics_process(dt: float) -> void:
 		return
 	if swing.swing_just_started:
 		_hit_flags.fill(0)
+		_hits_this_swing = 0
 		swing.base_angle = _aim_angle()
+	var prev_phase := swing.phase
 	swing.advance(dt)
+	if prev_phase == SwordSwing.Phase.ACTIVE and swing.phase == SwordSwing.Phase.RECOVERY:
+		combo.register_swing(_hits_this_swing)
 	if swing.phase == SwordSwing.Phase.ACTIVE:
 		_sweep_hits()
 	queue_redraw()
@@ -57,8 +66,8 @@ func _aim_angle() -> float:
 
 func _sweep_hits() -> void:
 	var p := global_position
-	var reach_sq := (REACH + 14.0) * (REACH + 14.0)
-	for i in _sim.grid.circle_candidates(p, REACH):
+	var reach_sq := (reach + 14.0) * (reach + 14.0)
+	for i in _sim.grid.circle_candidates(p, reach):
 		if _hit_flags[i] == 1 or i >= _sim.active_count:
 			continue
 		var to: Vector2 = _sim.positions[i] - p
@@ -70,8 +79,11 @@ func _sweep_hits() -> void:
 		# capture the victim's slot position before damage — a kill swap-removes
 		# the slot and the index would point at a different enemy afterwards
 		var hit_pos: Vector2 = _sim.positions[i]
-		var died := _sim.damage(i, DAMAGE, to.normalized())
-		_on_hit.call(hit_pos, DAMAGE, died)
+		var died := _sim.damage(i, damage, to.normalized())
+		_hits_this_swing += 1
+		if combo.register_hits(1):
+			combo_burst.emit(p)
+		_on_hit.call(hit_pos, damage, died)
 
 
 func _draw() -> void:
@@ -82,16 +94,16 @@ func _draw() -> void:
 	if swing.phase == SwordSwing.Phase.ACTIVE:
 		col = Color(1.0, 0.97, 0.9)
 	# blade slab
-	draw_line(dir * 16.0, dir * REACH, col, 12.0)
-	draw_line(dir * (REACH - 22.0), dir * REACH, col, 20.0)
+	draw_line(dir * 16.0, dir * reach, col, 12.0)
+	draw_line(dir * (reach - 22.0), dir * reach, col, 20.0)
 	# hilt crossbar behind the hero
 	draw_line(-dir * 14.0 + perp * 9.0, -dir * 14.0 - perp * 9.0, Color(0.5, 0.4, 0.3), 6.0)
 	# sweep smear while active
 	if swing.phase == SwordSwing.Phase.ACTIVE:
-		var arc_start := swing.base_angle - swing.arc_half_angle * swing.sweep_dir
-		var swept := 2.0 * swing.arc_half_angle * swing.sweep_progress()
+		var arc_start := swing.base_angle - swing.current_arc_half() * swing.sweep_dir
+		var swept := 2.0 * swing.current_arc_half() * swing.sweep_progress()
 		draw_arc(
-			Vector2.ZERO, REACH * 0.92,
+			Vector2.ZERO, reach * 0.92,
 			minf(arc_start, arc_start + swing.sweep_dir * swept),
 			maxf(arc_start, arc_start + swing.sweep_dir * swept),
 			24, Color(1.0, 0.9, 0.7, 0.28), 22.0)

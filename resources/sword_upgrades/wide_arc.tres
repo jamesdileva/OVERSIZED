@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SwordUpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/sword_upgrade_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"wide_arc"
+display_name = "Wide Arc"
+description = "+15° of swing arc. Room service, for everyone."
+effect_type = "stat_mod"
+effect_id = &"wide_arc"
+magnitude = 0.26
+rarity_weight = 1.0
+max_stacks = 4

@@ -1,10 +1,10 @@
 extends Node2D
 
-## Sprint 0.2 feel prototype: one hero, the oversized sword, one enemy type,
-## damage numbers, shake and hit-stop. No meta, no progression screens
-## (that's Phase 1). The horde runs on the pooled sim the Sprint 0.1 spike
-## validated; a lightweight spawner keeps a slowly growing crowd alive so
-## the sword always has something to hit.
+## Sprint 1.1: wave loop + Sword Upgrade picks. Waves cycle on a timer
+## (architecture.md §4) while enemies keep spawning; the timer ending clears
+## the wave (survivors despawn, no payout until currencies exist in 1.3) and
+## opens the shared choice screen. Picks apply through UpgradeEffects and
+## visibly change the sword. No XP/abilities (1.2), no meta (1.3).
 
 const POOL_CAPACITY := 2000
 const ARENA_HALF := 1350.0
@@ -15,20 +15,18 @@ var player: Player
 var sword: Sword
 var camera: CameraRig
 var numbers: DamageNumbers
+var director := WaveDirector.new()
+var choice_screen: ChoiceScreen
 
 var kills := 0
+var taken := {}                # SwordUpgradeDef.id -> stack count
+var leech_on_kill := 0.0
 
-var _elapsed := 0.0
-var _spawn_accum := 0.0
 var _dead := false
 var _hitstop_busy := false
-
 var _hud_hp: ColorRect
-var _hud_kills: Label
-var _hud_fps: Label
+var _hud_info: Label
 var _hud_accum := 0.0
-
-var _shot_left := -1
 
 
 func _ready() -> void:
@@ -46,6 +44,7 @@ func _ready() -> void:
 	sword = Sword.new()
 	player.add_child(sword)
 	sword.setup(sim, _on_sword_hit)
+	sword.combo_burst.connect(_on_combo_burst)
 
 	numbers = DamageNumbers.new()
 	add_child(numbers)
@@ -53,39 +52,55 @@ func _ready() -> void:
 	camera = CameraRig.new()
 	player.add_child(camera)
 
+	choice_screen = ChoiceScreen.new()
+	add_child(choice_screen)
+	choice_screen.chosen.connect(_on_upgrade_chosen)
+
 	_build_hud()
 	DebugConsole.register_handler(self, {
 		"spawn": {"args": ["n"], "desc": "spawn n enemies around the player"},
 		"heal": {"args": [], "desc": "restore full HP"},
+		"wave": {"args": ["n"], "desc": "jump to wave n (for testing late waves)"},
 		"restart": {"args": [], "desc": "restart the run"},
 	})
-	for k in 14:
-		_spawn_one()
-	# automated gameplay screenshot for CI-style verification: --shot <frames>
+
+	sim.enemy_killed.connect(func(_at: Vector2) -> void: kills += 1)
+	player.died.connect(_on_player_died)
+
+	director.start(ContentLoader.waves)
+	_apply_wave_mods()
+	EventBus.wave_started.emit(director.wave_number)
+
+	# automated gameplay screenshot: --shot <frames> — the countdown runs on
+	# an ignore-time-scale, process-always timer so it can also capture the
+	# paused choice screen; wave 1 is shortened so the choice screen appears
 	var uargs := OS.get_cmdline_user_args()
 	var fi := uargs.find("--shot")
 	if fi != -1 and fi + 1 < uargs.size():
-		_shot_left = maxi(int(uargs[fi + 1]), 1)
-		# cap to 60fps so frame count ≈ wall time ≈ sim time, and seed the
-		# arena close to the player so hits are happening at capture time
+		var frames := maxi(int(uargs[fi + 1]), 1)
 		Engine.max_fps = 60
+		director.current.duration = minf(director.current.duration, 2.0)
+		director.time_left = minf(director.time_left, 2.0)  # the clock copied duration at start
 		for k in 30:
-			sim.spawn(player.position
-					+ Vector2.from_angle(randf() * TAU) * randf_range(160.0, 340.0))
+			_spawn_one()
+		_shot_after(frames / 60.0)
+
+
+func _shot_after(seconds: float) -> void:
+	await get_tree().create_timer(seconds, true, false, true).timeout
+	_take_shot()
 
 
 func _physics_process(dt: float) -> void:
 	if _dead:
 		return
-	_elapsed += dt
-	# spawn ring stays near the camera view edge so the crowd is visible;
-	# the sword kills faster than distant enemies arrive otherwise
-	var target_alive := mini(18 + int(_elapsed * 0.3), 80)
-	_spawn_accum += dt
-	if _spawn_accum >= 0.4:
-		_spawn_accum = 0.0
-		while sim.active_count < target_alive:
+	var to_spawn := director.tick(dt)
+	for k in to_spawn:
+		if sim.active_count < director.current.max_alive:
 			_spawn_one()
+	if director.is_cleared():
+		_clear_wave()
+		return
 	sim.step(dt, player.position)
 	_contact_damage()
 
@@ -93,15 +108,47 @@ func _physics_process(dt: float) -> void:
 func _process(dt: float) -> void:
 	_hud_accum += dt
 	if _hud_accum >= 0.25:
-		_hud_fps.text = "%d fps  |  enemies %d  |  kills %d  |  [R] restart  |  [F1] console" % [
-			Engine.get_frames_per_second(), sim.active_count, kills]
+		var combo_txt := ""
+		if sword.combo.threshold > 0:
+			combo_txt = "  |  combo %d/%d" % [sword.combo.hits, sword.combo.threshold]
+		_hud_info.text = "Wave %d — %ds  |  enemies %d  |  kills %d%s  |  [Space] dash  |  [R] restart" % [
+			director.wave_number, ceili(director.time_left), sim.active_count, kills, combo_txt]
 		_hud_accum = 0.0
-	if _shot_left > 0:
-		_shot_left -= 1
-		if _shot_left == 0:
-			_take_shot()
-		elif _shot_left % 60 == 0:
-			print("shot countdown: %d frames (%d enemies, %d kills)" % [_shot_left, sim.active_count, kills])
+
+
+func _spawn_one() -> void:
+	var pos := player.position + Vector2.from_angle(randf() * TAU) * randf_range(380.0, 560.0)
+	sim.spawn(pos.clamp(
+		Vector2(-ARENA_HALF, -ARENA_HALF), Vector2(ARENA_HALF, ARENA_HALF)))
+
+
+func _clear_wave() -> void:
+	sim.clear_all()
+	EventBus.wave_cleared.emit(director.wave_number)
+	var offers := UpgradeEffects.roll_upgrade_offers(ContentLoader.sword_upgrades, taken, 3)
+	get_tree().paused = true
+	choice_screen.open(director.wave_number, offers, taken)
+
+
+func _on_upgrade_chosen(index: int) -> void:
+	var def: SwordUpgradeDef = choice_screen.offers[index]
+	taken[def.id] = int(taken.get(def.id, 0)) + 1
+	UpgradeEffects.apply(def, _upgrade_ctx())
+	EventBus.upgrade_selected.emit(def)
+	get_tree().paused = false
+	director.advance()
+	_apply_wave_mods()
+	EventBus.wave_started.emit(director.wave_number)
+
+
+func _upgrade_ctx() -> Dictionary:
+	return {"sword": sword, "sim": sim, "player": player, "run": self}
+
+
+func _apply_wave_mods() -> void:
+	var w: WaveDef = director.current
+	sim.max_speed = 150.0 * w.speed_scale
+	sim.max_health = 30.0 * w.health_scale
 
 
 func _contact_damage() -> void:
@@ -115,18 +162,33 @@ func _contact_damage() -> void:
 			break
 
 
-func _spawn_one() -> void:
-	var pos := player.position + Vector2.from_angle(randf() * TAU) * randf_range(380.0, 560.0)
-	sim.spawn(pos.clamp(
-		Vector2(-ARENA_HALF, -ARENA_HALF), Vector2(ARENA_HALF, ARENA_HALF)))
-
-
 func _on_sword_hit(pos: Vector2, amount: float, killed: bool) -> void:
 	numbers.pop(pos, amount, killed)
 	camera.add_trauma(0.06 + (0.28 if killed else 0.0))
+	if killed and leech_on_kill > 0.0:
+		player.heal(leech_on_kill)
 	if killed:
-		kills += 1
 		_hit_stop()
+
+
+func _on_combo_burst(center: Vector2) -> void:
+	var radius := 210.0
+	var dmg := sword.damage * 2.0
+	for i in sim.grid.circle_candidates(center, radius):
+		if i >= sim.active_count:
+			continue
+		var away: Vector2 = sim.positions[i] - center
+		if away.length_squared() > radius * radius:
+			continue
+		var push := away.normalized() if away.length() > 0.01 else Vector2.RIGHT
+		sim.damage(i, dmg, push)
+	numbers.pop(center + Vector2(0, -30), dmg, true)
+	camera.add_trauma(0.4)
+	_hit_stop()
+	var ring := BurstRing.new()
+	ring.position = center
+	ring.radius = radius
+	add_child(ring)
 
 
 func _hit_stop() -> void:
@@ -145,7 +207,7 @@ func _take_shot() -> void:
 		return
 	var img := get_viewport().get_texture().get_image()
 	if img != null and not img.is_empty():
-		img.save_png("user://sprint02_shot.png")
+		img.save_png("user://sprint11_shot.png")
 	get_tree().quit()
 
 
@@ -165,12 +227,10 @@ func _build_hud() -> void:
 	_hud_hp.position = Vector2(2, 2)
 	_hud_hp.size = Vector2(256, 14)
 	hp_bg.add_child(_hud_hp)
-	_hud_kills = Label.new()
-	_hud_kills.text = ""
-	_hud_fps = Label.new()
+	_hud_info = Label.new()
+	_hud_info.text = ""
 	vb.add_child(hp_bg)
-	vb.add_child(_hud_kills)
-	vb.add_child(_hud_fps)
+	vb.add_child(_hud_info)
 	margin.add_child(vb)
 	layer.add_child(margin)
 	player.hp_changed.connect(_on_hp_changed)
@@ -213,6 +273,15 @@ func console_heal() -> String:
 	player.hp = player.max_hp
 	player.hp_changed.emit(player.hp, player.max_hp)
 	return "HP restored"
+
+
+func console_wave(n: String) -> String:
+	var target := maxi(int(n), 1)
+	director.wave_number = target - 1
+	director.advance()
+	_apply_wave_mods()
+	return "jumped to wave %d (%.0fs, %0.1f spawns/s)" % [
+		director.wave_number, director.time_left, director.current.spawns_per_second]
 
 
 func console_restart() -> String:

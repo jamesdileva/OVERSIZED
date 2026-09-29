@@ -2,7 +2,7 @@
 
 A 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7** (GDScript). One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves; run-scoped Sword Upgrades plus a permanently-growing pool of auto-casting Universal Abilities.
 
-**Status:** Pre-production — Sprint 0.2 (core feel prototype).
+**Status:** Pre-production — Sprint 1.1 (wave loop + Sword Upgrade picks).
 
 ![gameplay](docs/media/sprint-0.2-gameplay.png)
 
@@ -22,7 +22,7 @@ Open the project in Godot 4.7.x, or:
 godot --path .
 ```
 
-Controls: **WASD / left stick** to move (the sword swings itself — always, no cooldown), **R** restarts, **F1** opens the debug console (`spawn <n>`, `heal`, `restart`, `help`).
+Controls: **WASD / left stick** to move, **Space / gamepad A** to dash (no cooldown — never interrupts the swing), **R** restarts, **F1** opens the debug console (`spawn <n>`, `heal`, `wave <n>`, `restart`, `help`). Waves clear on a timer; every clear opens a 3-card Sword Upgrade choice.
 
 ## Tests
 

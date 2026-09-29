@@ -24,6 +24,17 @@ var sweep_dir := 1.0         # alternates every swing
 var swing_index := 0
 var swing_just_started := false
 var active_just_started := false
+var spin_every := 0          # 0 = off; every Nth swing sweeps a full 360°
+var _spin_active := false
+
+
+func is_spin_swing() -> bool:
+	return _spin_active
+
+
+## Arc half-width for the CURRENT swing — a spin swing covers all angles.
+func current_arc_half() -> float:
+	return PI if _spin_active else arc_half_angle
 
 
 func start(angle: float) -> void:
@@ -57,6 +68,8 @@ func _enter(p: int, leftover := 0.0) -> void:
 	phase = p
 	swing_just_started = p == Phase.WINDUP
 	active_just_started = p == Phase.ACTIVE
+	if p == Phase.WINDUP:
+		_spin_active = spin_every > 0 and swing_index % spin_every == 0
 	match p:
 		Phase.WINDUP:
 			phase_left = windup_time + leftover
@@ -78,15 +91,15 @@ func sweep_progress() -> float:
 ## Angle of the blade edge right now — windup pulls back past the arc start,
 ## active sweeps arc start to arc end, recovery rests at the arc end.
 func blade_angle() -> float:
-	var arc_start := base_angle - arc_half_angle * sweep_dir
+	var arc_start := base_angle - current_arc_half() * sweep_dir
 	match phase:
 		Phase.WINDUP:
 			var t := 1.0 - clampf(phase_left / windup_time, 0.0, 1.0)
 			return arc_start - sweep_dir * windup_pull * (1.0 - t)
 		Phase.ACTIVE:
-			return arc_start + sweep_dir * 2.0 * arc_half_angle * sweep_progress()
+			return arc_start + sweep_dir * 2.0 * current_arc_half() * sweep_progress()
 		Phase.RECOVERY:
-			return arc_start + sweep_dir * 2.0 * arc_half_angle
+			return arc_start + sweep_dir * 2.0 * current_arc_half()
 		_:
 			return arc_start
 
