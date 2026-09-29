@@ -78,7 +78,9 @@ The sword's baseline behavior: swing, brief recovery, swing again — no cooldow
 - Extra hitbox passes per swing (double-swing, spin finisher)
 - Elemental infusions (fire DoT, frost slow, poison stacks, bleed)
 - Lifesteal, knockback, execute-below-%-HP, chain-to-additional-target
-- Windup/recovery reduction (the closest thing to an "attack speed" stat, since there's no cooldown to shorten)
+- Windup/recovery reduction (the closest thing to an "attack speed" stat, since there's no cooldown to shorten) — stacked, this is the "fast combo flurry" feel; there are no input-sequence combos because there is no attack input, by design
+
+**Combo-counter archetype** (confirmed design): the sword tracks consecutive *landed hits* — a full swing that connects with nothing resets the counter, so keeping the blade in meat is the skill that builds it. Upgrades hook thresholds: "every Nth swing is a Spin Finisher (360° arc, bonus damage)," "at max combo, release a shockwave burst," and so on. Combo-triggered effects belong to the sword track — they modify the sword's own rhythm and reset each run — while timed big effects (cooldown-based auto-casts) stay on the Universal Ability track; that keeps the two build lanes from competing (Section 5.3). Implementation-wise the counter lives in the pure-logic swing state machine (`implementation-guide.md` Section 5.1) and threshold effects route through the standard damage pipeline with a spatial-hash AoE query, exactly like the ability examples in `implementation-guide.md` Section 7.
 
 Because this pool is fully reset each run, it's the primary source of "this run feels completely different from last run" — the roguelite promise.
 
@@ -180,7 +182,7 @@ graph LR
 Module responsibilities, briefly:
 
 - **GameManager / EventBus** — owns the state machine (Menu → Run → Summary → Hub) and a central signal bus so combat, progression, and UI don't hold direct references to each other.
-- **Combat** — player movement, the sword's swing state machine, and the damage pipeline everything routes through (so crits, elemental effects, and lifesteal all have one place to hook in).
+- **Combat** — player movement (including the confirmed no-cooldown dash — `implementation-guide.md` Section 1), the sword's swing state machine, and the damage pipeline everything routes through (so crits, elemental effects, and lifesteal all have one place to hook in).
 - **Enemies** — a wave director that reads data-driven wave definitions, an object pool (never `instantiate()` mid-combat), and a boss controller with its own telegraphed-attack state machine.
 - **Progression** — XP/leveling and the two choice-screen pickers, each pulling from a different pool (run-local for sword, Mastery-gated for abilities).
 - **Meta** — the save file, Mastery Rank logic, and the two currencies. This is the only system that persists across runs.

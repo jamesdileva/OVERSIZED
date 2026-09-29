@@ -15,7 +15,7 @@ Two principles govern it:
 
 | Phase | Scope goal | Status |
 |---|---|---|
-| 0 — Pre-Production | De-risk horde performance; prove the core swing feels good | Sprint 0.1 done (go); Sprint 0.2 next |
+| 0 — Pre-Production | De-risk horde performance; prove the core swing feels good | Done — go (~2,200 @ 60fps); feel prototype playable |
 | 1 — Vertical Slice | One complete 10-wave run, one boss, both pick-screens, minimal meta loop | |
 | 2 — Systems Build-out | Every core system at MVP breadth (full content *types*, not full content *volume*) | |
 | 3 — Content & Balance | Full v1.0 content budget, tuned, with juice/VFX/SFX and accessibility basics | |
@@ -35,13 +35,14 @@ Two principles govern it:
 ### Sprint 0.2 — Core feel prototype
 - **Tasks**: player movement, the sword swing state machine (`implementation-guide.md` Section 5.1), one enemy type, basic damage numbers, screen-shake/hit-stop juice on the swing; gamepad bindings for every input action added from here on (left stick movement, dash button) so the prototype is gamepad-playable immediately. No meta-systems, no progression screens yet.
 - **Definition of Done**: "is swinging a big sword at a crowd of guys fun for five straight minutes with zero other systems in place?" If the answer's no, everything downstream is at risk regardless of how good the systems built on top of it are — worth being honest here before investing further.
+- **Outcome (2026-09-28): done.** Playable feel prototype — auto-swing sword with hash-based arc hits, damage numbers/shake/hit-stop, gamepad verified by hand. Both of us rate the core feel good; all tuning knobs are exposed fields for fast iteration. See `worklog.md`.
 
 ## 4. Phase 1 — Vertical Slice
 
 **Goal**: one complete run is playable start to finish, even with placeholder art and a small content set.
 
 ### Sprint 1.1 — Wave loop + Sword Upgrade picks
-- Wave Director reading `WaveDef` resources; wave-clear condition (timer-based, per `architecture.md` Section 4); the shared choice-screen UI component (`implementation-guide.md` Section 9); 5-8 real Sword Upgrades.
+- Wave Director reading `WaveDef` resources; wave-clear condition (timer-based, per `architecture.md` Section 4); the shared choice-screen UI component (`implementation-guide.md` Section 9); 5-8 real Sword Upgrades — including at least one combo-counter archetype upgrade (`architecture.md` Section 5.1) — implemented as `.tres` data files; the no-cooldown dash (`implementation-guide.md` Section 1).
 
 ### Sprint 1.2 — Leveling + Universal Ability picks + first boss
 - XP/leveling; 5-8 real Universal Abilities using the same shared choice-screen component; the first hand-authored boss at wave 10 with a telegraphed attack pattern (`implementation-guide.md` Section 8).
