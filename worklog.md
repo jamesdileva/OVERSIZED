@@ -6,7 +6,7 @@ One entry per completed sprint, appended in order. Format per `AGENTS.md`: scope
 
 ## Sprint 0.1 — Horde performance spike (2026-09-28)
 
-**Scope** (from `sprint-roadmap.md` §5.1): engine/project setup per `implementation-guide.md` §1–2; build the object-pooling + manual-position + spatial-hash pattern in isolation (no gameplay — dots seeking a point); add the `stress_test <n>` debug command; render via `MultiMeshInstance2D` from the start. **DoD**: a hard, measured number for concurrent enemies at 60fps — this sprint is a go/no-go checkpoint.
+**Scope** (from `sprint-roadmap.md`, Phase 0 — Sprint 0.1): engine/project setup per `implementation-guide.md` §1–2; build the object-pooling + manual-position + spatial-hash pattern in isolation (no gameplay — dots seeking a point); add the `stress_test <n>` debug command; render via `MultiMeshInstance2D` from the start. **DoD**: a hard, measured number for concurrent enemies at 60fps — this sprint is a go/no-go checkpoint.
 
 **Built**
 

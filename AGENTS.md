@@ -36,7 +36,7 @@ Then close the loop: review the sprint result together and agree the next sprint
 - **The sword never has a cooldown.** Windup → Active → Recovery → Windup, forever. Attack-pace upgrades shorten windup/recovery; they don't add cooldowns. Universal Abilities are the opposite: always on individual cooldowns, never player-triggered. (`implementation-guide.md` §5.1, §7)
 - **Saves carry a `schema_version` field from the very first file written.** (`implementation-guide.md` §10)
 - **v1.0 non-goals hold:** no multiplayer, no console ports, no mod support, no narrative, no hand-crafted level layouts. (`architecture.md` §12)
-- **Phases are scope-gated, not date-gated.** A phase ends when its Definition of Done is true, not when a calendar says so. Sprint 0.1 is a hard go/no-go checkpoint: if the horde-performance target isn't met by end of sprint, lower the concurrent-enemy target and move on. (`sprint-roadmap.md` §1, §5)
+- **Phases are scope-gated, not date-gated.** A phase ends when its Definition of Done is true, not when a calendar says so. Sprint 0.1 was a hard go/no-go checkpoint — resolved with a go (see `worklog.md`). (`sprint-roadmap.md` §1, §3)
 
 ## Verification expectations
 
