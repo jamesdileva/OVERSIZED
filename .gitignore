@@ -1,0 +1,8 @@
+# Godot 4+ specific ignores
+.godot/
+*.translation
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+*.tmp
