@@ -57,3 +57,50 @@ One entry per completed sprint, appended in order. Format per `AGENTS.md`: scope
 - Splash/loading screen, project icon, license file.
 
 **Next**: Sprint 0.2 — core feel prototype (player movement, sword swing state machine, one enemy type, damage numbers, hit-stop/screen-shake; gamepad-playable from the start). DoD: "is swinging a big sword at a crowd of guys fun for five straight minutes with zero other systems?"
+
+---
+
+## Sprint 0.2 — Core feel prototype (2026-09-28)
+
+**Scope** (from `sprint-roadmap.md`, Phase 0 — Sprint 0.2): player movement, the sword swing state machine (`implementation-guide.md` §5.1), one enemy type, basic damage numbers, screen-shake/hit-stop juice on the swing; gamepad-playable from the start. No meta, no progression screens. **DoD**: the five-minute fun question — answerable only by playing.
+
+**Built**
+
+- `scripts/combat/sword_swing.gd` — pure-logic swing state machine: Windup → Active → Recovery → Windup forever, alternating sweep direction, no cooldown gate. Sub-frame remainders are carried across transitions so the cycle rate is exactly 1/(windup+active+recovery) over time (a frame-quantization drift of ~6% was caught by the cycle-rate test and fixed).
+- `scenes/run/player/sword.gd` — hash-based hit detection per `implementation-guide.md` §5.2's scaling approach: `circle_candidates` around the hero (radius > cell size supported), exact reach + sweep-window tests, one hit per enemy per swing (per-slot flags), auto-aim at the nearest enemy at swing start. Placeholder blade + arc-smear custom drawing.
+- `scripts/horde/horde_sim.gd` — extended with `healths`/`hit_flash` arrays, `damage()` (flash + knockback along hit direction + `enemy_killed` signal before the swap-remove), flash decay in the step loop.
+- `scripts/horde/spatial_hash.gd` — `circle_candidates(center, radius)`: superset query that expands cell rings for radii larger than cell_size (the sword reaches 155px over 48px cells).
+- `scenes/run/player/player.gd` — accel/friction 8-direction movement, HP, contact damage with i-frames, death → auto-restart. Manual position updates: the whole scene still contains zero physics bodies.
+- `scenes/run/run.gd` + `run.tscn` (now the main scene) — spawner keeping a visible crowd near the camera view edge, HUD (HP bar / fps / enemies / kills), R restart, console commands `spawn`/`heal`/`restart`, `--shot <frames>` automated screenshot mode.
+- Juice: pooled damage numbers (rise/fade, bigger on kill), trauma² camera shake, 45ms hit-stop on kill (time-scale dip with an ignore-time-scale restore timer).
+- `scripts/horde/horde_renderer.gd` — per-instance color so hit-flash tints enemies toward white.
+
+**Verified**
+
+- Tests: **27/27 pass** — pool, hash (incl. circle-candidates superset vs brute force at radius > cell), swing machine (never idles across 3,600 ticks; cycle rate 154.0 vs 153.8 expected; hit-window leads/trails the blade edge correctly), damage/death (flash, knockback, kill signal, swap integrity).
+- Boot-check of the main scene headless: zero script errors (added to AGENTS.md verification expectations after this sprint's parse-error escape — see findings).
+- Performance checklist re-run after sim changes (required by `implementation-guide.md` §14): windowed 500 → 3.30 ms, 1000 → 7.51 ms, 2000 → 15.30 ms — the ~2,200 @ 60fps ceiling holds; per-instance flash colors cost nothing measurable.
+- Automated gameplay run (`--shot 330`): 32 kills in 5.5s with the crowd replenishing; screenshot in `docs/media/sprint-0.2-gameplay.png` shows sword mid-sweep with smear, damage numbers fading, an enemy mid hit-flash. Hand-verified by both of us in interactive play: movement feel + gamepad (left stick) confirmed working.
+
+**Findings worth keeping**
+
+- **`PackedBoolArray` does not exist in Godot 4.7.2's GDScript** — even a bare type annotation fails to parse (verified in isolation). Use `PackedByteArray` for per-slot bool flags. The isolated repro also confirmed the parse failure was engine-side, not project-side.
+- **A parse error in one script can half-load a scene**: the first `--shot` run launched, player + gamepad worked (their classes compiled), but the sword/spawner/HUD never came up and nothing auto-quit — it looked "fine" until compared against intent. Hence the new AGENTS.md rule: boot-check the main scene headless and read the output every sprint.
+- **Missing render layer class of bug**: the enemies were fully simulated and killable before `HordeRenderer` was added to the run scene — kills and damage numbers worked while nothing enemy-shaped was visible. Perf and logic tests can't catch a missing `add_child`; the automated screenshot can. Keep `--shot` in the verification routine.
+- The stationary bot dies in ~7s to a close-spawning crowd — contact damage/i-frames/knockback all work; balance is a Phase 3 concern.
+
+**Decisions & deviations**
+
+- Spawn ring tightened to 380–560px (near the camera view edge) with a floor of 18 enemies — the first screenshot showed zero enemies in frame at 500–900px; the genre needs the crowd visible.
+- Bench invocation now names the scene explicitly (`res://scenes/run/stress_test.tscn`) since the main scene is the game; README updated.
+- The sword auto-aims its arc at the nearest enemy per swing — a feel call (the hero's only input is movement; a blindly swinging sword would whiff constantly).
+
+**Deferred**
+
+- Dash/dodge (input action reserved, no behavior) — candidate for Sprint 0.3 if the feel needs it, else Phase 1.
+- Enemy variety, real art, audio, XP/leveling — Phase 1+ per roadmap.
+
+**Verdict on the DoD question** — needs more hands-on time, but first impressions (both of us): swinging the oversized sword into a crowd with shake/hit-stop/numbers reads great. Tuning knobs (windup/active/recovery, reach, damage, knockback) are all plain fields on `SwordSwing`/`Sword`/`HordeSim` for fast iteration.
+
+**Next**: playtest Sprint 0.2 for feel, tune the knobs; then Sprint 1.1 — wave loop + Sword Upgrade picks (WaveDef-driven Wave Director, timer-based wave clear, the shared choice-screen component, 5–8 real Sword Upgrades as `.tres` files).
+
