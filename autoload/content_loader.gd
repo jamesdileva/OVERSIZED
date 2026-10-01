@@ -5,6 +5,7 @@ extends Node
 ## changes. Autoloaded as ContentLoader.
 
 var sword_upgrades: Array = []
+var universal_abilities: Array = []
 var waves: Array = []
 
 
@@ -14,6 +15,7 @@ func _ready() -> void:
 
 func load_all() -> void:
 	sword_upgrades = _scan_dir("res://resources/sword_upgrades")
+	universal_abilities = _scan_dir("res://resources/universal_abilities")
 	waves = _scan_dir("res://resources/waves")
 	waves.sort_custom(func(a, b): return a.number < b.number)
 

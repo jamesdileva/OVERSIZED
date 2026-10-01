@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"scholars_wit"
+display_name = "Scholar's Wit"
+description = "+10% XP gained per rank. Level faster, snowball harder."
+kind = "passive"
+ap_cost = 2
+unlock_level = 1
+tags = 0
+max_rank = 3
+cooldown = 0.0
+effect_id = &"scholars_wit"
+magnitude = 0.10

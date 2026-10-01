@@ -27,6 +27,9 @@ func _initialize() -> void:
 	_test_combo_counter()
 	_test_spin_swing()
 	_test_upgrade_effects_apply()
+	_test_run_levels()
+	_test_boss_brain()
+	_test_ability_caster()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -56,6 +59,9 @@ func _test_scripts_compile() -> void:
 		"res://scripts/combat/sword_swing.gd",
 		"res://scripts/combat/combo_counter.gd",
 		"res://scripts/combat/upgrade_effects.gd",
+		"res://scripts/combat/ability_caster.gd",
+		"res://scripts/combat/run_levels.gd",
+		"res://scripts/combat/boss_brain.gd",
 		"res://scenes/run/wave_director/wave_director.gd",
 		"res://scenes/run/player/player.gd",
 		"res://scenes/run/player/sword.gd",
@@ -64,6 +70,11 @@ func _test_scripts_compile() -> void:
 		"res://scenes/run/damage_numbers.gd",
 		"res://scenes/run/burst_ring.gd",
 		"res://scenes/run/stress_test.gd",
+		"res://scenes/run/xp_gems.gd",
+		"res://scenes/run/boss/boss.gd",
+		"res://scenes/run/abilities/orbit_blades.gd",
+		"res://scenes/run/abilities/spirit_blade.gd",
+		"res://scenes/run/abilities/lightning_flash.gd",
 		"res://scenes/ui/choice_screen/choice_screen.gd",
 		"res://autoload/content_loader.gd",
 		"res://autoload/event_bus.gd",
@@ -315,7 +326,13 @@ func _test_upgrade_defs_load() -> void:
 	var loader = load("res://autoload/content_loader.gd").new()
 	loader.load_all()
 	check(loader.sword_upgrades.size() >= 8, "at least 8 sword upgrade .tres files load (got %d)" % loader.sword_upgrades.size())
-	check(loader.waves.size() >= 5, "at least 5 wave .tres files load (got %d)" % loader.waves.size())
+	check(loader.universal_abilities.size() >= 8, "at least 8 ability .tres files load (got %d)" % loader.universal_abilities.size())
+	check(loader.waves.size() >= 10, "at least 10 wave .tres files load (got %d)" % loader.waves.size())
+	var boss_wave: WaveDef = loader.waves[9]
+	check(boss_wave.number == 10 and boss_wave.boss != null, "wave 10 references a boss")
+	var boss_res = load("res://resources/bosses/wave10_boss.tres")
+	check(boss_res != null and boss_res.max_health > 0.0 and boss_res.enrage_time > 0.0,
+			"boss def loads with sane fields")
 	var sane := true
 	for w in loader.waves:
 		if w.duration <= 0.0 or w.spawns_per_second <= 0.0:
@@ -347,6 +364,14 @@ func _test_roll_offers() -> void:
 	check(no_max, "maxed upgrade never offered")
 	var small := UpgradeEffects.roll_upgrade_offers([_make_upgrade(&"x"), _make_upgrade(&"y")], {}, 3)
 	check(small.size() == 2, "pool smaller than count returns the whole pool")
+	var ability_pool := [_make_ability(&"orb", "active", 1), _make_ability(&"slam", "active", 5)]
+	var ability_offers := UpgradeEffects.roll_upgrade_offers(ability_pool, {&"orb": 1}, 3)
+	var no_maxed_ability := true
+	for o in ability_offers:
+		if o.id == &"orb":
+			no_maxed_ability = false
+	check(ability_offers.size() == 1 and no_maxed_ability,
+			"duck-typed roller excludes maxed abilities (max_rank field)")
 
 
 func _test_wave_director() -> void:
@@ -456,3 +481,85 @@ func _test_upgrade_effects_apply() -> void:
 	UpgradeEffects.apply(leech, ctx)
 	check(run["leech_on_kill"] == 2.0, "leech registers on the run context")
 	sword.free()
+
+
+func _test_run_levels() -> void:
+	print("run levels: xp curve is monotonic and round-trips")
+	check(RunLevels.xp_needed(1) == 5, "level 1 needs 5 XP")
+	var monotonic := true
+	for l in range(1, 40):
+		if RunLevels.xp_needed(l + 1) <= RunLevels.xp_needed(l):
+			monotonic = false
+	check(monotonic, "xp_needed strictly increasing across levels 1-40")
+	var lvl := RunLevels.level_for_xp(float(RunLevels.xp_needed(1)))
+	check(lvl == 2, "exactly enough XP for level 1 -> level 2")
+	var total := 0.0
+	for l in range(1, 6):
+		total += RunLevels.xp_needed(l)
+	check(RunLevels.level_for_xp(total) == 6, "cumulative XP lands exactly on level 6")
+
+
+func _test_boss_brain() -> void:
+	print("boss brain: HP phases and enrage multiplier")
+	var brain := BossBrain.new(900.0, 75.0)
+	check(brain.phase() == 1 and not brain.enraged, "starts phase 1, not enraged")
+	brain.damage(300.0)  # 600/900 = 0.667 -> still phase 1
+	check(brain.phase() == 1, "66.7% health is still phase 1")
+	brain.damage(100.0)  # 500/900 = 0.556 -> phase 2
+	check(brain.phase() == 2, "55.6% health is phase 2")
+	var mult2 := brain.speed_mult()
+	brain.damage(300.0)  # 200/900 -> phase 3
+	check(brain.phase() == 3 and brain.speed_mult() > mult2, "phase 3 is faster than phase 2")
+	var before := brain.speed_mult()
+	brain.tick(74.0)
+	check(not brain.enraged, "enrage not triggered before the timer")
+	brain.tick(2.0)
+	check(brain.enraged and brain.speed_mult() > before, "enrage triggers at the timer and speeds up")
+
+
+func _make_ability(id: StringName, kind := "active", max_rank := 5, effect := &"") -> UniversalAbilityDef:
+	var d := UniversalAbilityDef.new()
+	d.id = id
+	d.display_name = String(id)
+	d.description = "test"
+	d.kind = kind
+	d.max_rank = max_rank
+	d.cooldown = 3.0
+	d.effect_id = effect if effect != &"" else id
+	return d
+
+
+func _test_ability_caster() -> void:
+	print("ability caster: passives recompute, actives fire on cooldown")
+	var sim := HordeSim.new(64)
+	var player := Player.new()
+	var run := {"xp_magnet_radius": 90.0, "xp_mult": 1.0}
+	var boss_hits := []
+	var caster := AbilityCaster.new()
+	caster.setup(sim, player, run, func(pos: Vector2, radius: float, amount: float) -> void:
+		boss_hits.append(amount))
+	var vitality := _make_ability(&"vitality", "passive", 3, &"vitality")
+	caster.bring_online(vitality)
+	check(player.max_hp == 120.0, "Vitality rank 1 raises max HP to 120")
+	check(caster.rank_up(&"vitality"), "rank up succeeds below cap")
+	check(player.max_hp == 140.0, "Vitality rank 2 raises max HP to 140")
+	var boots := _make_ability(&"swift_boots", "passive", 3, &"swift_boots")
+	caster.bring_online(boots)
+	check(absf(player.move_speed - 324.0) < 0.01, "Swift Boots rank 1 sets 324 move speed")
+	check(run["xp_mult"] == 1.0, "unrelated passive leaves xp_mult alone")
+	# ground slam: spawn an enemy on top of the player, force the cooldown fire
+	var slam := _make_ability(&"ground_slam", "active", 5, &"ground_slam")
+	slam.cooldown = 2.0
+	slam.magnitude = 18.0
+	caster.bring_online(slam)
+	var idx := sim.spawn(player.position + Vector2(20, 0))
+	sim.step(1.0 / 60.0, Vector2(9999, 9999))  # rebuild the hash
+	var hp_before: float = sim.healths[idx]
+	caster.tick(1.1)  # first fire is at half cooldown (1.0s)
+	check(sim.healths[idx] < hp_before, "ground slam damaged the enemy in range")
+	check(caster.rank_of(&"ground_slam") == 1, "slam registered at rank 1")
+	# max-rank cap respected
+	var capped := _make_ability(&"capped_thing", "passive", 1, &"vitality")
+	caster.bring_online(capped)
+	check(not caster.rank_up(&"capped_thing"), "rank up refused at max_rank")
+	player.free()

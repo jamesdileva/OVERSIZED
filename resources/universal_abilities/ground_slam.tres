@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"ground_slam"
+display_name = "Ground Slam"
+description = "Periodically slams the ground around you, damaging and shoving everything nearby."
+kind = "active"
+ap_cost = 4
+unlock_level = 1
+tags = 1152
+max_rank = 5
+cooldown = 5.0
+effect_id = &"ground_slam"
+magnitude = 18.0

@@ -22,6 +22,8 @@ var combo := ComboCounter.new()
 
 var _sim: HordeSim
 var _on_hit: Callable
+var boss_getter: Callable          # run provides () -> Boss (or null)
+var _boss_hit_this_swing := false
 var _hit_flags: PackedByteArray = PackedByteArray()
 var _hits_this_swing := 0
 
@@ -39,6 +41,7 @@ func _physics_process(dt: float) -> void:
 	if swing.swing_just_started:
 		_hit_flags.fill(0)
 		_hits_this_swing = 0
+		_boss_hit_this_swing = false
 		swing.base_angle = _aim_angle()
 	var prev_phase := swing.phase
 	swing.advance(dt)
@@ -84,6 +87,26 @@ func _sweep_hits() -> void:
 		if combo.register_hits(1):
 			combo_burst.emit(p)
 		_on_hit.call(hit_pos, damage, died)
+	_sweep_boss(p)
+
+
+## The boss is a single entity outside the pooled sim, so the sweep tests it
+## separately with the same reach + window rules, once per swing.
+func _sweep_boss(p: Vector2) -> void:
+	if _boss_hit_this_swing or not boss_getter.is_valid():
+		return
+	var b = boss_getter.call()
+	if b == null:
+		return
+	var to: Vector2 = b.global_position - p
+	if to.length() > reach + b.body_radius:
+		return
+	if not swing.in_hit_window(to.angle()):
+		return
+	_boss_hit_this_swing = true
+	var hit_pos: Vector2 = b.global_position - to.normalized() * b.body_radius
+	b.take_damage(damage)
+	_on_hit.call(hit_pos, damage, false)
 
 
 func _draw() -> void:

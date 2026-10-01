@@ -6,4 +6,4 @@ extends Node
 
 signal wave_started(number: int)
 signal wave_cleared(number: int)
-signal upgrade_selected(def: SwordUpgradeDef)
+signal upgrade_selected(def)   # SwordUpgradeDef or UniversalAbilityDef — untyped on purpose

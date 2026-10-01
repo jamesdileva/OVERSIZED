@@ -50,13 +50,13 @@ func _ready() -> void:
 		_buttons.append(b)
 
 
-func open(wave: int, p_offers: Array, p_owned: Dictionary = {}) -> void:
+func open(title: String, p_offers: Array, p_owned: Dictionary = {}) -> void:
 	offers = p_offers
-	_title.text = "WAVE %d CLEARED — CHOOSE AN UPGRADE" % wave
+	_title.text = title
 	for k in _buttons.size():
 		var b := _buttons[k]
 		if k < offers.size():
-			var def: SwordUpgradeDef = offers[k]
+			var def = offers[k]
 			b.visible = true
 			var stacks: int = p_owned.get(def.id, 0)
 			var owned := "  (owned ×%d)" % stacks if stacks > 0 else ""

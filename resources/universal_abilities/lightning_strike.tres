@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"lightning_strike"
+display_name = "Lightning Strike"
+description = "Periodically strikes a random enemy in range with a bolt from above."
+kind = "active"
+ap_cost = 4
+unlock_level = 1
+tags = 524292
+max_rank = 5
+cooldown = 3.2
+effect_id = &"lightning_strike"
+magnitude = 16.0

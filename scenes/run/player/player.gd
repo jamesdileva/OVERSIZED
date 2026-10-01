@@ -81,3 +81,12 @@ func heal(amount: float) -> void:
 		return
 	hp = minf(max_hp, hp + amount)
 	hp_changed.emit(hp, max_hp)
+
+
+## Used by passive ability recompute (Vitality). Raising the cap also raises
+## current HP by the same delta so rank-ups never waste the gain.
+func set_max_hp(v: float) -> void:
+	if v > max_hp:
+		hp += v - max_hp
+	max_hp = v
+	hp_changed.emit(hp, max_hp)

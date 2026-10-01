@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"orbit_blades"
+display_name = "Orbiting Blades"
+description = "2+ blades orbit you, shredding anything that touches them. Persistent — always on once online."
+kind = "active"
+ap_cost = 3
+unlock_level = 1
+tags = 64
+max_rank = 5
+cooldown = 0.0
+effect_id = &"orbit_blades"
+magnitude = 1.0

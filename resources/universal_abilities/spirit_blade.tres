@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"spirit_blade"
+display_name = "Spirit Blade"
+description = "Periodically launches a homing blade that seeks the nearest enemy."
+kind = "active"
+ap_cost = 3
+unlock_level = 1
+tags = 256
+max_rank = 5
+cooldown = 2.5
+effect_id = &"spirit_blade"
+magnitude = 14.0

@@ -38,12 +38,14 @@ static func apply(def: SwordUpgradeDef, ctx: Dictionary) -> void:
 
 ## Offer roller for the shared choice screen: distinct picks, weighted by
 ## rarity_weight, upgrades at max stacks excluded, fewer offers than requested
-## when the eligible pool is small.
+## when the eligible pool is small. Duck-typed on purpose: works for any def
+## with id / rarity_weight / max_stacks OR max_rank (UniversalAbilityDef).
 static func roll_upgrade_offers(pool: Array, taken: Dictionary, count := 3) -> Array:
 	var weighted := []
 	for def in pool:
 		var stacks: int = taken.get(def.id, 0)
-		if def.max_stacks > 0 and stacks >= def.max_stacks:
+		var cap: int = def.max_stacks if "max_stacks" in def else def.max_rank
+		if cap > 0 and stacks >= cap:
 			continue
 		var w := maxi(int(round(def.rarity_weight * 10.0)), 1)
 		for k in w:
