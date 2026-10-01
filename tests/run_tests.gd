@@ -30,6 +30,8 @@ func _initialize() -> void:
 	_test_run_levels()
 	_test_boss_brain()
 	_test_ability_caster()
+	_test_meta_progression()
+	_test_game_manager_scenes()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -76,9 +78,14 @@ func _test_scripts_compile() -> void:
 		"res://scenes/run/abilities/spirit_blade.gd",
 		"res://scenes/run/abilities/lightning_flash.gd",
 		"res://scenes/ui/choice_screen/choice_screen.gd",
+		"res://scenes/ui/main_menu.gd",
+		"res://scenes/ui/run_summary.gd",
+		"res://scenes/ui/meta_hub.gd",
 		"res://autoload/content_loader.gd",
 		"res://autoload/event_bus.gd",
 		"res://autoload/debug_console.gd",
+		"res://autoload/meta_progression.gd",
+		"res://autoload/game_manager.gd",
 	]
 	for p in paths:
 		var s = load(p)
@@ -563,3 +570,44 @@ func _test_ability_caster() -> void:
 	caster.bring_online(capped)
 	check(not caster.rank_up(&"capped_thing"), "rank up refused at max_rank")
 	player.free()
+
+
+func _test_meta_progression() -> void:
+	print("meta progression: rewards, save/load round-trip, corrupt fallback")
+	var mp = load("res://autoload/meta_progression.gd").new()
+	mp.save_path = "user://test_meta_save.json"
+	var rewards: Dictionary = mp.record_run(10, 640, 1)
+	check(rewards["hero_xp"] > 0.0 and rewards["glory"] > 0, "record_run returns positive rewards")
+	check(mp.hero_level >= 2, "a wave-10 run levels the hero at least once")
+	check(mp.best_wave == 10 and mp.total_runs == 1 and mp.total_kills == 640, "run stats tracked")
+	var f := FileAccess.open(mp.save_path, FileAccess.READ)
+	var text := f.get_as_text()
+	f.close()
+	check("\"schema_version\": 1" in text, "save carries schema_version from the first write")
+	var mp2 = load("res://autoload/meta_progression.gd").new()
+	mp2.save_path = mp.save_path
+	mp2.load_save()
+	check(absf(mp2.hero_xp - mp.hero_xp) < 0.01 and mp2.glory == mp.glory and mp2.hero_level == mp.hero_level,
+			"save/load round-trips hero state")
+	f = FileAccess.open(mp.save_path, FileAccess.WRITE)
+	f.store_string("not json at all{{{")
+	f.close()
+	mp2.load_save()
+	check(mp2.hero_level == 1 and mp2.total_runs == 0, "corrupt save falls back to fresh defaults")
+	f = FileAccess.open(mp.save_path, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"schema_version": 99, "hero_level": 7, "glory": 999}))
+	f.close()
+	mp2.load_save()
+	check(mp2.glory == 0, "newer schema_version is not loaded (fresh start)")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(mp.save_path))
+
+
+func _test_game_manager_scenes() -> void:
+	print("game manager: every state's scene exists")
+	var gm = load("res://autoload/game_manager.gd").new()
+	var all_exist := true
+	for s in gm.SCENES.values():
+		if not FileAccess.file_exists(s):
+			all_exist = false
+	check(all_exist, "menu/run/summary/hub scenes all exist on disk")
+	gm.free()

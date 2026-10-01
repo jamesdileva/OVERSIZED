@@ -23,6 +23,10 @@ var contact_invuln := 0.6
 
 var velocity := Vector2.ZERO
 
+var bot := false               # smoke-test mode: movement comes from bot_dir
+var bot_dir := Vector2.ZERO
+var invulnerable := false      # bot sessions: exercise progression, not dying
+
 var _invuln_left := 0.0
 var _dash_left := 0.0
 var _dash_dir := Vector2.RIGHT
@@ -47,7 +51,7 @@ func _physics_process(dt: float) -> void:
 		_dash_left -= dt
 		velocity = _dash_dir * DASH_SPEED
 	else:
-		var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+		var dir := bot_dir if bot else Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		if dir != Vector2.ZERO:
 			_last_move_dir = dir
 			velocity = velocity.move_toward(dir * move_speed, accel * dt)
@@ -66,7 +70,7 @@ func _physics_process(dt: float) -> void:
 
 
 func hurt(amount: float, push_dir: Vector2) -> void:
-	if _invuln_left > 0.0 or hp <= 0.0:
+	if _invuln_left > 0.0 or hp <= 0.0 or invulnerable:
 		return
 	hp = maxf(0.0, hp - amount)
 	_invuln_left = contact_invuln

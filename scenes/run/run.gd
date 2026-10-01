@@ -27,10 +27,16 @@ var leech_on_kill := 0.0
 var xp := 0.0
 var character_level := 1
 var pending_level_choices := 0
+var xp_magnet_radius := 90.0    # written by AbilityCaster passive recompute
+var xp_mult := 1.0              # written by AbilityCaster passive recompute
 var _choice_kind := ""               # "wave" | "level" — what's on screen now
 
 var _dead := false
 var _hitstop_busy := false
+var _run_time := 0.0
+var boss_kills := 0
+var _bot := false
+var _bot_target := 0.0
 var _hud_hp: ColorRect
 var _hud_xp: ColorRect
 var _hud_info: Label
@@ -93,9 +99,8 @@ func _ready() -> void:
 	_apply_wave_mods()
 	_start_wave()
 
-	# automated gameplay screenshot: --shot <frames> [--boss] — the countdown
-	# runs on an ignore-time-scale, process-always timer so it can also capture
-	# the paused choice screens; --boss jumps straight to the wave-10 fight
+	# automated gameplay screenshot: --shot <frames> [--boss]; bot smoke test:
+	# --bot <minutes> (time-accelerated, auto-picks choices, restarts on death)
 	var uargs := OS.get_cmdline_user_args()
 	var fi := uargs.find("--shot")
 	if fi != -1 and fi + 1 < uargs.size():
@@ -109,6 +114,17 @@ func _ready() -> void:
 		for k in 30:
 			_spawn_one()
 		_shot_after(frames / 60.0)
+	var bi := uargs.find("--bot")
+	if bi != -1 and bi + 1 < uargs.size():
+		_bot = true
+		_bot_target = float(maxi(int(uargs[bi + 1]), 1)) * 60.0
+		GameManager.bot_active = true
+		Engine.time_scale = 8.0
+		player.bot = true
+		# invulnerable: a kamikaze bot dies every few seconds and never
+		# exercises choices, abilities, or the boss — the whole point of the
+		# session is sustained progression under load
+		player.invulnerable = true
 
 
 func _start_wave() -> void:
@@ -134,6 +150,16 @@ func _spawn_boss() -> void:
 func _physics_process(dt: float) -> void:
 	if _dead:
 		return
+	_run_time += dt
+	if _bot:
+		_bot_steer()
+		if GameManager.bot_elapsed >= _bot_target:
+			print("BOT DONE: %.0f sim-s | wave %d | kills %d | fps %d | mem %.1f MB" % [
+				GameManager.bot_elapsed, director.wave_number, kills,
+				Engine.get_frames_per_second(),
+				Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0])
+			get_tree().quit(0)
+			return
 	var to_spawn := director.tick(dt)
 	for k in to_spawn:
 		if sim.active_count < director.current.max_alive:
@@ -143,6 +169,25 @@ func _physics_process(dt: float) -> void:
 		return
 	sim.step(dt, player.position)
 	_contact_damage()
+
+
+## Bot steering: hold "move toward the nearest enemy" (boss as fallback) —
+## the long-session smoke test from implementation-guide.md §14.
+func _bot_steer() -> void:
+	var p := player.global_position
+	var best_pos := Vector2.ZERO
+	var best_d := -1.0
+	for i in sim.grid.circle_candidates(p, 700.0):
+		if i >= sim.active_count:
+			continue
+		var d: float = sim.positions[i].distance_to(p)
+		if best_d < 0.0 or d < best_d:
+			best_d = d
+			best_pos = sim.positions[i]
+	if best_d < 0.0 and boss != null:
+		best_pos = boss.global_position
+		best_d = p.distance_to(best_pos)
+	player.bot_dir = (best_pos - p).normalized() if best_d > 0.0 else Vector2.ZERO
 
 
 func _process(dt: float) -> void:
@@ -172,6 +217,8 @@ func _clear_wave() -> void:
 	_choice_kind = "wave"
 	get_tree().paused = true
 	choice_screen.open("WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+	if _bot:
+		_bot_auto_pick()
 
 
 func _on_choice_made(index: int) -> void:
@@ -235,6 +282,14 @@ func _open_level_choice() -> void:
 	_choice_kind = "level"
 	get_tree().paused = true
 	choice_screen.open("LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
+	if _bot:
+		_bot_auto_pick()
+
+
+func _bot_auto_pick() -> void:
+	await get_tree().create_timer(0.5, true, false, true).timeout
+	if choice_screen.visible and not _dead:
+		_on_choice_made(0)
 
 
 func _contact_damage() -> void:
@@ -307,13 +362,14 @@ func _boss_damage_at(pos: Vector2, radius: float, amount: float) -> void:
 
 func _on_boss_died(_pos: Vector2) -> void:
 	boss = null
+	boss_kills += 1
 	camera.add_trauma(0.5)
 	_hit_stop()
 	_clear_wave()
 
 
 func _hit_stop() -> void:
-	if _hitstop_busy:
+	if _hitstop_busy or _bot:
 		return
 	_hitstop_busy = true
 	Engine.time_scale = 0.05
@@ -396,15 +452,27 @@ func _on_hp_changed(hp: float, max_hp: float) -> void:
 func _on_player_died() -> void:
 	_dead = true
 	player.set_physics_process(false)
+	if _bot:
+		get_tree().reload_current_scene()  # bot sessions continue across deaths
+		return
+	var rewards: Dictionary = MetaProgression.record_run(director.wave_number, kills, boss_kills)
+	GameManager.last_run = {
+		"waves": director.wave_number,
+		"kills": kills,
+		"level": character_level,
+		"time": _run_time,
+		"hero_xp": rewards["hero_xp"],
+		"glory": rewards["glory"],
+	}
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	var label := Label.new()
-	label.text = "YOU DIED — restarting…"
+	label.text = "YOU DIED"
 	label.add_theme_font_size_override("font_size", 40)
 	layer.add_child(label)
 	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	await get_tree().create_timer(1.4).timeout
-	get_tree().reload_current_scene()
+	await get_tree().create_timer(1.4, true, false, true).timeout
+	GameManager.goto(GameManager.State.SUMMARY)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

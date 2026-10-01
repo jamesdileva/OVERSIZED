@@ -2,7 +2,7 @@
 
 A 2D top-down, melee-first Bullet Heaven / Survivors-like built in **Godot 4.7** (GDScript). One hero, one absurdly oversized sword that never stops swinging; endless enemy waves, a boss every 10 waves; run-scoped Sword Upgrades plus a persistent **Hero Level** that grows your roster of auto-casting Universal Abilities and passives — and your loadout budget, with a tag-driven synergy system tying it all together.
 
-**Status:** Pre-production — Sprint 1.2 (leveling, Universal Abilities, first boss).
+**Status:** Pre-production — Sprint 1.3 (meta loop: menu, summary, hub, saves). Vertical slice complete when this sprint's DoD passes.
 
 ![gameplay](docs/media/sprint-0.2-gameplay.png)
 
