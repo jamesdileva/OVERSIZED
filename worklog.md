@@ -198,6 +198,47 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 
 **Lesson for 2.x:** nothing in the 1.2 suite could catch a missing engine callback — the compile guard checks scripts parse, not that they're driven. When a system is "pure logic + a caller," the caller deserves its own assertion. Also: the playtest's negative reports ("didn't seem to work") were precise enough to diagnose all three symptoms from one cause — worth encouraging that specificity in future playtests.
 
+---
+
+## Sprint 2.1 — Tag & effect foundation (2026-10-01)
+
+**Scope** (from `sprint-roadmap.md`, Phase 2 — Sprint 2.1, approved before build): `Tags` enum + bitmask helpers; hit-event pipeline carrying `tag_mask`; two-category damage math; status arrays in the horde layer with three statuses (Burn, Chill, Bleed); tags on all existing Sword Upgrade and Ability definitions. Art lane: tag→color map, asset-tracker stub, import presets, sourcing decisions. Pre-approved defaults held: statuses apply at damage-time from source tags, exactly three statuses, Chill via movement multiplier, one run-scoped damage-mod pool.
+
+**Built**
+
+- `scripts/combat/tags.gd` — 24-tag enum, `mask`/`has`, `ALL_MASK` for validation, and the tag→color language as constants (Fire orange, Frost cyan, Shock yellow, Poison green, Blood crimson; hostile red-magenta stays reserved for enemies).
+- `HordeSim`: `hit_event(pos, amount, tag_mask)` signal; `damage()` now routes through `modified()` — `base × (1 + Σ increased[tag]) × Π more`, "more" capped at 4 — then applies statuses from source tags and emits the event; **Burn** (6 dps), **Chill** (35% seek slow), **Bleed** (9 dps) live as `status_mask` + timer PackedArrays ticked inside `step` (zero nodes). DoT applies health directly with kills processed after the loop, highest index first — calling `damage()` mid-iteration would swap-remove slots under the loop.
+- Wiring: the sword's hits carry `SLASH` + infusion tags (boss parity via `sim.modified`); every ability passes its def's tags; the combo burst is `SLASH|BURST`; **Pyre Attunement** feeds `increased{}` through the caster's from-scratch passive recompute.
+- Renderer: enemies tint per status from the tag colors (flash still wins on top).
+- Content: **Fire Infusion** and **Frost Infusion** upgrades use a single `infuse` handler that ORs the def's tags into the sword's hit mask — the next element is a `.tres` file with zero code. Tags populated on all 10 upgrades and 9 abilities.
+
+**Verified**
+
+- Tests: **71/71 pass** — mask round-trip; status apply/decay; Burn DoT kills; chilled enemies measurably slower; increased/more math with the cap; content coverage (every def's tags fit the enum; Fire/Frost/Blood each have ≥1 producer); Fire Infusion application.
+- Boot clean; bot 3 sim-min: wave 6 / 348 kills / no errors.
+- **Perf (the DoD number): 2000 enemies, 14.42 ms/step clean vs 14.29 ms/step all-burning-and-chilled** — statuses are free; the 2000 @ 60fps target holds with the foundation live.
+- Screenshot `docs/media/sprint-2.1-burning-horde.png`: Fire-Infused sword visibly tints the horde orange mid-fight with the boss.
+
+**Findings worth keeping**
+
+- **Test-math review pays before engine runs**: both first-run failures were my test arithmetic (Burn deals 18 over 3s — an enemy at 29 HP survives it; the chill assertion was inverted — slower means *farther* from the target). Recomputing expected outcomes by hand first would have saved a cycle.
+- **Callback signatures are contracts across files**: adding `tag_mask` to the boss-damage callback broke the test's lambda silently (runtime arity error aborts the test function — the 1.1 harness-guard lesson again). When a callback signature changes, grep every implementer.
+- DoT deliberately bypasses `modified()` (flat base) and doesn't emit hit_events — reaction interactions with DoT are a 2.4 tuning decision, not an accident.
+
+**Decisions & deviations**
+
+- Statuses apply at damage-time from source tags — the deep-dive's EventBus reaction filter lands in 2.4; the signal is in place.
+- Burn/Bleed damage and Chill slow are sim constants; the tuning pass (2.4/3.3) will move them to data if they need per-status authoring.
+- Fire/Frost Infusions are `max_stacks = 1` — repeat picks are dead offers until rank scaling is designed for infusions.
+
+**Deferred**
+
+- Reactions, resonance, rerolls/banish, synergy-biased offers, evolutions (Sprint 2.4).
+- Shock/Poison statuses (with their content, 2.3+); stronger status VFX (VFX kit, 2.4 lane); import presets + asset tracker stub (art lane, first pixel-art sprint).
+
+**Next**: Sprint 2.2 — Hero Level, AP, and loadouts: `ProgressionCurve` resource, Hero XP at run end driving roster unlocks, the loadout screen (AP bar, slot cap, free respec, presets), opening-ability pick, level-up offers drawing from the equipped loadout, save schema additions.
+
+
 
 
 ---
