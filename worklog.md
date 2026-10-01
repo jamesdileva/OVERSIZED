@@ -183,6 +183,22 @@ One entry per completed sprint, appended in order. Format per `AGENTS.md`: scope
 
 **Next**: Phase 2 per the roadmap — Sprint 2.1 (tag & effect foundation: `Tags` bitmask on hit events, two-category damage math, three statuses in the horde layer) is the "never cut" foundation everything else builds on. Before that: both of us play the slice end-to-end and log feel/pace issues to carry into 2.x tuning.
 
+---
+
+## Hotfix — playtest findings (2026-09-29, post-slice playtest)
+
+Both of us played the full loop (user reached wave 12/13 and reported; bot verified). Findings + fixes, committed as `fix: actives never fired; orbit blades didn't follow or tick`:
+
+- **All four actives were dead on arrival** — my 1.2 code wrote `tick()` but never the `_physics_process` that calls it, so cooldowns never counted down and nothing ever cast (Ground Slam, Lightning Strike, Spirit Blade: "not sure they worked" — correct, they didn't).
+- **Orbiting Blades were stationary at world origin** — `AbilityCaster` extended plain `Node`, cutting its Node2D children off the player's transform chain. Now Node2D; blades follow the hero.
+- **The arena boundary existed (player clamps) but nothing drew it** — a border is now drawn; proper art in Phase 3.
+- Confirmed working in the same playtest: lifesteal, Combo Burst, Reach Up, Swift Strikes, dash, XP/level-ups, summary/hub loop, gamepad.
+
+Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot went **wave 6 / 342 kills** (pre-fix pace was ~1 kill per life); screenshot `docs/media/hotfix-abilities-firing.png` shows the orbit ring on the hero and Ground Slam's rank-1 damage (18s) landing on the boss.
+
+**Lesson for 2.x:** nothing in the 1.2 suite could catch a missing engine callback — the compile guard checks scripts parse, not that they're driven. When a system is "pure logic + a caller," the caller deserves its own assertion. Also: the playtest's negative reports ("didn't seem to work") were precise enough to diagnose all three symptoms from one cause — worth encouraging that specificity in future playtests.
+
+
 
 ---
 
