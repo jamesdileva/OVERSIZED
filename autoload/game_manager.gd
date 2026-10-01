@@ -28,6 +28,9 @@ var _bot_log_accum := 0.0
 
 func _ready() -> void:
 	var uargs := OS.get_cmdline_user_args()
+	var hl_idx := uargs.find("--hero_level")
+	if hl_idx != -1 and hl_idx + 1 < uargs.size():
+		MetaProgression.set_hero_level(int(uargs[hl_idx + 1]))
 	# automation never sits in the menu
 	if uargs.has("--bot") or uargs.has("--shot"):
 		goto(State.RUN)
@@ -35,14 +38,20 @@ func _ready() -> void:
 	var ui_idx := uargs.find("--ui_shot")
 	if ui_idx != -1 and ui_idx + 1 < uargs.size():
 		var frames := maxi(int(uargs[ui_idx + 1]), 1)
-		var target := State.MENU
 		var to_idx := uargs.find("--to")
-		if to_idx != -1 and to_idx + 1 < uargs.size():
-			match uargs[to_idx + 1]:
-				"hub":
-					target = State.HUB
-				"summary":
-					target = State.SUMMARY
+		var to_name := uargs[to_idx + 1] if to_idx != -1 and to_idx + 1 < uargs.size() else "menu"
+		if to_name == "loadout":
+			# hub sub-screen — direct scene change, not a state-machine state
+			get_tree().paused = false
+			get_tree().change_scene_to_file("res://scenes/ui/loadout.tscn")
+			_ui_shot(frames / 60.0)
+			return
+		var target := State.MENU
+		match to_name:
+			"hub":
+				target = State.HUB
+			"summary":
+				target = State.SUMMARY
 		if target == State.SUMMARY and last_run.is_empty():
 			last_run = {"waves": 10, "kills": 640, "level": 7, "time": 612.0, "hero_xp": 211.0, "glory": 94}
 		goto(target)

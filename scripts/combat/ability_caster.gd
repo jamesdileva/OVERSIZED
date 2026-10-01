@@ -129,6 +129,8 @@ func _refresh_passives() -> void:
 	var speed := 300.0
 	var magnet := 90.0
 	var xp_mult := 1.0
+	var armor := 0.0
+	var regen := 0.0
 	_sim.clear_damage_mods()  # recomputed from scratch with the stats
 	for id in _entries:
 		var e: Dictionary = _entries[id]
@@ -145,10 +147,16 @@ func _refresh_passives() -> void:
 				magnet += 45.0 * float(rank)
 			&"scholars_wit":
 				xp_mult += 0.10 * float(rank)
+			&"plating":
+				armor += def.magnitude * float(rank)
+			&"regeneration":
+				regen += def.magnitude * float(rank)
 			&"tag_amplifier":
 				_sim.add_increased(def.tags, def.magnitude * float(rank))
 	_player.set_max_hp(max_hp)
 	_player.move_speed = speed
+	_player.armor = armor
+	_player.regen_ps = regen
 	_run.xp_magnet_radius = magnet
 	_run.xp_mult = xp_mult
 

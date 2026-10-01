@@ -4,14 +4,15 @@
 
 [resource]
 script = ExtResource("1_ab")
-id = &"vitality"
-display_name = "Vitality"
-description = "+20 max HP per rank, applied immediately."
+id = &"plating"
+display_name = "Plating"
+description = "Take 6% less damage per rank, from everything."
 kind = "passive"
 ap_cost = 2
-unlock_level = 3
+unlock_level = 18
 tags = 0
 max_rank = 3
 cooldown = 0.0
-effect_id = &"vitality"
-magnitude = 20.0
+effect_id = &"plating"
+magnitude = 0.06
+rarity_weight = 0.7

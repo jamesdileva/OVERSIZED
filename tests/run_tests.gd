@@ -36,6 +36,8 @@ func _initialize() -> void:
 	_test_statuses()
 	_test_damage_mods()
 	_test_tags_coverage()
+	_test_progression_curve()
+	_test_loadout_rules()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -69,6 +71,7 @@ func _test_scripts_compile() -> void:
 		"res://scripts/combat/run_levels.gd",
 		"res://scripts/combat/boss_brain.gd",
 		"res://scripts/combat/tags.gd",
+		"res://scripts/resource_defs/progression_curve.gd",
 		"res://scenes/run/wave_director/wave_director.gd",
 		"res://scenes/run/player/player.gd",
 		"res://scenes/run/player/sword.gd",
@@ -86,11 +89,13 @@ func _test_scripts_compile() -> void:
 		"res://scenes/ui/main_menu.gd",
 		"res://scenes/ui/run_summary.gd",
 		"res://scenes/ui/meta_hub.gd",
+		"res://scenes/ui/loadout.gd",
 		"res://autoload/content_loader.gd",
 		"res://autoload/event_bus.gd",
 		"res://autoload/debug_console.gd",
 		"res://autoload/meta_progression.gd",
 		"res://autoload/game_manager.gd",
+		"res://autoload/audio_bus.gd",
 	]
 	for p in paths:
 		var s = load(p)
@@ -589,7 +594,7 @@ func _test_meta_progression() -> void:
 	var f := FileAccess.open(mp.save_path, FileAccess.READ)
 	var text := f.get_as_text()
 	f.close()
-	check("\"schema_version\": 1" in text, "save carries schema_version from the first write")
+	check("\"schema_version\": 2" in text, "save carries the current schema_version")
 	var mp2 = load("res://autoload/meta_progression.gd").new()
 	mp2.save_path = mp.save_path
 	mp2.load_save()
@@ -713,3 +718,69 @@ func _test_tags_coverage() -> void:
 	UpgradeEffects.apply(infuse, ctx)
 	check(sword.hit_tag_mask & Tags.FIRE_BIT != 0, "Fire Infusion adds FIRE to the sword's hit mask")
 	sword.free()
+
+
+func _test_progression_curve() -> void:
+	print("progression curve: AP key rows and roster unlocks")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	check(loader.progression_curve != null, "curve resource loads from resources/progression")
+	var curve: ProgressionCurve = loader.progression_curve
+	check(curve.ap_for(1) == 5, "level 1 budget is 5 AP")
+	check(curve.ap_for(10) == 14, "level 10 budget is 14 AP")
+	check(curve.ap_for(20) == 24, "level 20 budget is 24 AP")
+	check(curve.xp_needed(1) == 100, "level 1 needs 100 hero XP")
+	check(curve.unlocks_at(1).size() == 2, "level 1 unlocks two abilities")
+	check(curve.owned_through(10).size() == 5, "5 abilities owned at Hero Level 10")
+	check(curve.owned_through(20).size() == 10, "10 abilities owned at Hero Level 20")
+	check(curve.owned_through(22).size() == 11, "11 abilities owned at Hero Level 22")
+
+
+func _test_loadout_rules() -> void:
+	print("loadout rules: AP budget, slot cap, presets, default greedy fill")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	var mp = load("res://autoload/meta_progression.gd").new()
+	mp.save_path = "user://test_loadout_save.json"
+	mp.curve = loader.progression_curve
+	mp.ability_lookup = Callable(loader, "ability_by_id")
+	mp.set_hero_level(10)  # budget 14, 5 owned
+	mp.ensure_default_loadout()
+	var equipped: Array = mp.equipped_ids()
+	check(equipped.size() == 5, "default greedy loadout equips all 5 owned at L10 (AP fits)")
+	var used := 0
+	for id in equipped:
+		used += mp._cost_of(id)
+	check(used == 14, "the full L10 kit costs exactly the 14 AP budget")
+	mp.set_hero_level(20)  # budget 24, 10 owned costing 26 — crunch must bite
+	var kit: Array = mp.equipped_ids()
+	var used20 := 0
+	for id in kit:
+		used20 += mp._cost_of(id)
+	check(kit.size() == 9 and used20 <= 24, "L20 crunch: greedy fills 9 of 10 within the 24 AP budget")
+	var err: String = mp.equip(&"vitality")  # already in default kit
+	check(err == "already equipped", "double-equip refused")
+	# unequip one (cost 2) then equip something that fits
+	mp.unequip(&"scholars_wit")
+	err = mp.equip(&"scholars_wit")
+	check(err == "", "re-equip after unequip succeeds")
+	mp.unequip(&"scholars_wit")
+	# presets
+	var before: Array = (mp.equipped_ids() as Array).duplicate()
+	mp.save_slot_as(1)
+	mp.select_slot(0)
+	mp.unequip(&"orbit_blades")
+	mp.select_slot(1)
+	check(mp.equipped_ids() == before, "preset save/load round-trips the kit")
+	# audio bus skeleton: voice cap + interval + finished frees a slot
+	var ab = load("res://autoload/audio_bus.gd").new()
+	ab.register_sound(&"test_sound", 2, 100000)
+	var a: bool = ab.can_play(&"test_sound")
+	ab.finished(&"test_sound")
+	var b: bool = ab.can_play(&"test_sound")  # blocked by retrigger interval
+	ab._last_played[&"test_sound"] = -1000000000
+	var c: bool = ab.can_play(&"test_sound")
+	ab.can_play(&"test_sound")
+	var d: bool = ab.can_play(&"test_sound")  # voice cap = 2
+	check(a and not b and c and not d, "voice limits + retrigger interval + finished() all enforced")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(mp.save_path))

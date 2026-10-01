@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 DebugConsole="*res://autoload/debug_console.gd"
 EventBus="*res://autoload/event_bus.gd"
 ContentLoader="*res://autoload/content_loader.gd"
+AudioBus="*res://autoload/audio_bus.gd"
 MetaProgression="*res://autoload/meta_progression.gd"
 GameManager="*res://autoload/game_manager.gd"
 

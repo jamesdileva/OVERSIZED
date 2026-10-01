@@ -26,6 +26,8 @@ var velocity := Vector2.ZERO
 var bot := false               # smoke-test mode: movement comes from bot_dir
 var bot_dir := Vector2.ZERO
 var invulnerable := false      # bot sessions: exercise progression, not dying
+var armor := 0.0               # Plating: fraction of incoming damage removed
+var regen_ps := 0.0            # Regeneration: HP/s while alive
 
 var _invuln_left := 0.0
 var _dash_left := 0.0
@@ -60,6 +62,9 @@ func _physics_process(dt: float) -> void:
 	position += velocity * dt
 	position = position.clamp(
 		Vector2(-ARENA_HALF, -ARENA_HALF), Vector2(ARENA_HALF, ARENA_HALF))
+	if regen_ps > 0.0 and hp > 0.0 and hp < max_hp:
+		hp = minf(max_hp, hp + regen_ps * dt)
+		hp_changed.emit(hp, max_hp)
 	# no cooldown: the only gate is the dash itself finishing (ninja rules).
 	# The sword is a separate node with its own _physics_process, so dashing
 	# cannot interrupt the swing.
@@ -72,7 +77,7 @@ func _physics_process(dt: float) -> void:
 func hurt(amount: float, push_dir: Vector2) -> void:
 	if _invuln_left > 0.0 or hp <= 0.0 or invulnerable:
 		return
-	hp = maxf(0.0, hp - amount)
+	hp = maxf(0.0, hp - amount * (1.0 - clampf(armor, 0.0, 0.6)))
 	_invuln_left = contact_invuln
 	velocity += push_dir * 220.0
 	hp_changed.emit(hp, max_hp)

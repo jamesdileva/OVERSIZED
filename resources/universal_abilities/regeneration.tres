@@ -4,14 +4,15 @@
 
 [resource]
 script = ExtResource("1_ab")
-id = &"vitality"
-display_name = "Vitality"
-description = "+20 max HP per rank, applied immediately."
+id = &"regeneration"
+display_name = "Regeneration"
+description = "Recover 2 HP per second per rank. The flood never stops; neither do you."
 kind = "passive"
 ap_cost = 2
-unlock_level = 3
+unlock_level = 22
 tags = 0
 max_rank = 3
 cooldown = 0.0
-effect_id = &"vitality"
-magnitude = 20.0
+effect_id = &"regeneration"
+magnitude = 2.0
+rarity_weight = 0.6

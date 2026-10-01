@@ -7,6 +7,9 @@ extends Node
 var sword_upgrades: Array = []
 var universal_abilities: Array = []
 var waves: Array = []
+var progression_curve: ProgressionCurve = null
+
+var _ability_index: Dictionary = {}
 
 
 func _ready() -> void:
@@ -18,6 +21,16 @@ func load_all() -> void:
 	universal_abilities = _scan_dir("res://resources/universal_abilities")
 	waves = _scan_dir("res://resources/waves")
 	waves.sort_custom(func(a, b): return a.number < b.number)
+	var curves := _scan_dir("res://resources/progression")
+	if curves.size() > 0:
+		progression_curve = curves[0]
+	_ability_index.clear()
+	for def in universal_abilities:
+		_ability_index[def.id] = def
+
+
+func ability_by_id(id: StringName) -> UniversalAbilityDef:
+	return _ability_index.get(id)
 
 
 func _scan_dir(path: String) -> Array:

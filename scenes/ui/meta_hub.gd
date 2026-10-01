@@ -58,30 +58,36 @@ func _ready() -> void:
 	start.pressed.connect(func() -> void: GameManager.goto(GameManager.State.RUN))
 	vb.add_child(start)
 	var loadout := Button.new()
-	loadout.text = "Loadout (coming in the Systems Build-out)"
+	loadout.text = "Loadout"
 	loadout.custom_minimum_size = Vector2(280, 48)
-	loadout.pressed.connect(_toggle_stub)
+	loadout.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/ui/loadout.tscn"))
 	vb.add_child(loadout)
-	var stub := Label.new()
-	stub.text = "Ability loadouts and AP budgets arrive in Sprint 2.2.\nUntil then, every ability you own is available in runs."
-	stub.add_theme_font_size_override("font_size", 16)
-	stub.modulate = Color(1, 1, 1, 0.65)
-	stub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stub.visible = false
-	vb.add_child(stub)
 	var back := Button.new()
 	back.text = "Back to Menu"
 	back.custom_minimum_size = Vector2(280, 48)
 	back.pressed.connect(func() -> void: GameManager.goto(GameManager.State.MENU))
 	vb.add_child(back)
 	start.grab_focus()
-	_stub = stub
+	DebugConsole.register_handler(self, {
+		"hero_level": {"args": ["n"], "desc": "simulate Hero Level n (debug, reloads hub)"},
+		"give_glory": {"args": ["n"], "desc": "grant n Glory (debug)"},
+	})
 
-var _stub: Label
+
+func console_hero_level(n: String) -> String:
+	MetaProgression.set_hero_level(maxi(int(n), 1))
+	get_tree().reload_current_scene()
+	return "Hero Level set to %d — %d abilities owned, %d AP budget" % [
+		MetaProgression.hero_level,
+		MetaProgression.owned_abilities().size(),
+		MetaProgression.ap_budget()]
 
 
-func _toggle_stub() -> void:
-	_stub.visible = not _stub.visible
+func console_give_glory(n: String) -> String:
+	MetaProgression.glory += maxi(int(n), 0)
+	MetaProgression.save()
+	return "Glory: %d" % MetaProgression.glory
 
 
 func _spacer(h: float) -> Control:

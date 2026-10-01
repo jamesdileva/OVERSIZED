@@ -37,6 +37,13 @@ var _run_time := 0.0
 var boss_kills := 0
 var _bot := false
 var _bot_target := 0.0
+var _equipped_defs: Array = []
+var _opening_picks_left := 0
+var _shot_mode := false
+var _shot_frames := 0
+var _shot_boss := false
+var _shot_abilities := false
+var _shot_burn := false
 var _hud_hp: ColorRect
 var _hud_xp: ColorRect
 var _hud_info: Label
@@ -98,33 +105,16 @@ func _ready() -> void:
 
 	director.start(ContentLoader.waves)
 	_apply_wave_mods()
-	_start_wave()
 
-	# automated gameplay screenshot: --shot <frames> [--boss] [--abilities]; bot smoke test:
-	# --bot <minutes> (time-accelerated, auto-picks choices, restarts on death)
+	# automation flags first — they change how the run starts
 	var uargs := OS.get_cmdline_user_args()
 	var fi := uargs.find("--shot")
 	if fi != -1 and fi + 1 < uargs.size():
-		var frames := maxi(int(uargs[fi + 1]), 1)
-		Engine.max_fps = 60
-		if uargs.has("--boss"):
-			console_wave("10")
-		else:
-			director.current.duration = minf(director.current.duration, 2.0)
-			director.time_left = minf(director.time_left, 2.0)  # the clock copied duration at start
-		if uargs.has("--abilities"):
-			# bring every active online so screenshots show them firing
-			for def in ContentLoader.universal_abilities:
-				if def.kind == "active":
-					caster.bring_online(def)
-		if uargs.has("--burn"):
-			# guaranteed Fire Infusion: sword hits burn the horde (orange tint)
-			for d in ContentLoader.sword_upgrades:
-				if d.id == &"fire_infusion":
-					UpgradeEffects.apply(d, _upgrade_ctx())
-		for k in 30:
-			_spawn_one()
-		_shot_after(frames / 60.0)
+		_shot_mode = true
+		_shot_frames = maxi(int(uargs[fi + 1]), 1)
+		_shot_boss = uargs.has("--boss")
+		_shot_abilities = uargs.has("--abilities")
+		_shot_burn = uargs.has("--burn")
 	var bi := uargs.find("--bot")
 	if bi != -1 and bi + 1 < uargs.size():
 		_bot = true
@@ -136,6 +126,48 @@ func _ready() -> void:
 		# exercises choices, abilities, or the boss — the whole point of the
 		# session is sustained progression under load
 		player.invulnerable = true
+
+	# equipped loadout (architecture.md §5.2): passives are online from run
+	# start at rank 1; actives arrive via the opening pick and level-up cards
+	for id in MetaProgression.equipped_ids():
+		var def = ContentLoader.ability_by_id(id)
+		if def != null:
+			_equipped_defs.append(def)
+	for def in _equipped_defs:
+		if def.kind == "passive":
+			caster.bring_online(def)
+
+	if _shot_mode:
+		Engine.max_fps = 60
+		if _shot_abilities:
+			# bring every active online so screenshots show them firing
+			for def in ContentLoader.universal_abilities:
+				if def.kind == "active" and caster.rank_of(def.id) == 0:
+					caster.bring_online(def)
+		if _shot_burn:
+			# guaranteed Fire Infusion: sword hits burn the horde (orange tint)
+			for d in ContentLoader.sword_upgrades:
+				if d.id == &"fire_infusion":
+					UpgradeEffects.apply(d, _upgrade_ctx())
+		if _shot_boss:
+			console_wave("10")
+		else:
+			director.current.duration = minf(director.current.duration, 2.0)
+			director.time_left = minf(director.time_left, 2.0)  # the clock copied duration at start
+		for k in 30:
+			_spawn_one()
+		_shot_after(_shot_frames / 60.0)
+		_start_wave()
+		return
+
+	# opening-ability pick: one at run start, two from Hero Level 20 (§5.2)
+	_opening_picks_left = 1 + (1 if MetaProgression.hero_level >= 20 else 0)
+	var active_defs := _equipped_defs.filter(func(d): return d.kind == "active")
+	if _opening_picks_left > 0 and active_defs.size() > 0:
+		get_tree().paused = true
+		_open_opening_pick()
+	else:
+		_start_wave()
 
 
 func _start_wave() -> void:
@@ -241,28 +273,38 @@ func _clear_wave() -> void:
 
 func _on_choice_made(index: int) -> void:
 	var def = choice_screen.offers[index]
-	if _choice_kind == "wave":
-		taken_upgrades[def.id] = int(taken_upgrades.get(def.id, 0)) + 1
-		UpgradeEffects.apply(def, _upgrade_ctx())
-		EventBus.upgrade_selected.emit(def)
-		if pending_level_choices > 0:
-			_open_level_choice()   # stay paused; the queued level-up presents now
-			return
-		get_tree().paused = false
-		director.advance()
-		_apply_wave_mods()
-		_start_wave()
-	else:
-		if caster.rank_of(def.id) == 0:
+	match _choice_kind:
+		"wave":
+			taken_upgrades[def.id] = int(taken_upgrades.get(def.id, 0)) + 1
+			UpgradeEffects.apply(def, _upgrade_ctx())
+			EventBus.upgrade_selected.emit(def)
+			if pending_level_choices > 0:
+				pending_level_choices -= 1
+				if _open_level_choice():
+					return
+			get_tree().paused = false
+			director.advance()
+			_apply_wave_mods()
+			_start_wave()
+		"opening":
 			caster.bring_online(def)
-		else:
-			caster.rank_up(def.id)
-		EventBus.upgrade_selected.emit(def)
-		if pending_level_choices > 0:
-			pending_level_choices -= 1
-			_open_level_choice()
-			return
-		get_tree().paused = false
+			EventBus.upgrade_selected.emit(def)
+			_opening_picks_left -= 1
+			if _opening_picks_left > 0 and _open_opening_pick():
+				return
+			get_tree().paused = false
+			_start_wave()
+		"level":
+			if caster.rank_of(def.id) == 0:
+				caster.bring_online(def)
+			else:
+				caster.rank_up(def.id)
+			EventBus.upgrade_selected.emit(def)
+			if pending_level_choices > 0:
+				pending_level_choices -= 1
+				if _open_level_choice():
+					return
+			get_tree().paused = false
 
 
 func _upgrade_ctx() -> Dictionary:
@@ -294,14 +336,38 @@ func _on_xp_collected(amount: float) -> void:
 			_open_level_choice()
 
 
-func _open_level_choice() -> void:
+## Level-up cards draw from the EQUIPPED loadout only (architecture.md §5.2).
+## Returns false when the loadout has nothing left to offer (no pause).
+func _open_level_choice() -> bool:
 	var offers := UpgradeEffects.roll_upgrade_offers(
-		ContentLoader.universal_abilities, caster.taken_ranks(), 3)
+		_equipped_defs, caster.taken_ranks(), 3)
+	if offers.is_empty():
+		return false
 	_choice_kind = "level"
 	get_tree().paused = true
 	choice_screen.open("LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
 	if _bot:
 		_bot_auto_pick()
+	return true
+
+
+## Opening-ability pick: 2-3 random equipped-but-inactive actives.
+## Returns false when nothing eligible remains (finishes the opening).
+func _open_opening_pick() -> bool:
+	var pool := []
+	for d in _equipped_defs:
+		if d.kind == "active" and caster.rank_of(d.id) == 0:
+			pool.append(d)
+	if pool.is_empty():
+		return false
+	pool.shuffle()
+	var offers := pool.slice(0, mini(3, pool.size()))
+	_choice_kind = "opening"
+	get_tree().paused = true
+	choice_screen.open("CHOOSE YOUR OPENING ABILITY", offers, caster.taken_ranks())
+	if _bot:
+		_bot_auto_pick()
+	return true
 
 
 func _bot_auto_pick() -> void:
