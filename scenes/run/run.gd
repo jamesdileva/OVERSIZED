@@ -49,6 +49,7 @@ func _ready() -> void:
 	randomize()
 	RenderingServer.set_default_clear_color(Color(0.09, 0.09, 0.12))
 	sim = HordeSim.new(POOL_CAPACITY)
+	queue_redraw()  # arena border
 
 	horde_view = HordeRenderer.new()
 	add_child(horde_view)
@@ -99,7 +100,7 @@ func _ready() -> void:
 	_apply_wave_mods()
 	_start_wave()
 
-	# automated gameplay screenshot: --shot <frames> [--boss]; bot smoke test:
+	# automated gameplay screenshot: --shot <frames> [--boss] [--abilities]; bot smoke test:
 	# --bot <minutes> (time-accelerated, auto-picks choices, restarts on death)
 	var uargs := OS.get_cmdline_user_args()
 	var fi := uargs.find("--shot")
@@ -111,6 +112,11 @@ func _ready() -> void:
 		else:
 			director.current.duration = minf(director.current.duration, 2.0)
 			director.time_left = minf(director.time_left, 2.0)  # the clock copied duration at start
+		if uargs.has("--abilities"):
+			# bring every active online so screenshots show them firing
+			for def in ContentLoader.universal_abilities:
+				if def.kind == "active":
+					caster.bring_online(def)
 		for k in 30:
 			_spawn_one()
 		_shot_after(frames / 60.0)
@@ -145,6 +151,13 @@ func _spawn_boss() -> void:
 		add_child(ring)
 		camera.add_trauma(0.3))
 	add_child(boss)
+
+
+func _draw() -> void:
+	# arena boundary — the player clamps here, so show it (proper art in Phase 3)
+	var r := Rect2(-ARENA_HALF, -ARENA_HALF, ARENA_HALF * 2.0, ARENA_HALF * 2.0)
+	draw_rect(r, Color(0.4, 0.45, 0.6, 0.45), false, 4.0)
+	draw_rect(r.grow(6.0), Color(0.4, 0.45, 0.6, 0.15), false, 2.0)
 
 
 func _physics_process(dt: float) -> void:

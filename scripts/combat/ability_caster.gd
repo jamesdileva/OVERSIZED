@@ -1,5 +1,5 @@
 class_name AbilityCaster
-extends Node
+extends Node2D
 
 ## Owns the run's Universal Abilities: bring_online / rank_up per def,
 ## cooldown ticking for actives, the persistent Orbiting Blades hazard, and
@@ -8,6 +8,10 @@ extends Node
 ## visuals are delegated to the run scene via effect_visual, so the caster
 ## stays testable headless. Boss damage is delegated via a callback because
 ## the boss is deliberately not part of the pooled sim.
+##
+## Deliberately Node2D (not Node): persistent hazards and projectiles are
+## child nodes, and a plain Node in the parent chain would cut them off from
+## the player's transform — they'd sit at world origin instead of following.
 
 signal effect_visual(id: StringName, pos: Vector2, radius: float)
 
@@ -17,6 +21,10 @@ var _run                       # run scene: holds xp_magnet_radius / xp_mult for
 var _boss_damage_at: Callable  # (pos, radius, amount) — run applies it to the boss
 var _entries := {}             # id -> {"def": def, "rank": int, "cd": float}
 var _orbit: OrbitBlades = null
+
+
+func _physics_process(dt: float) -> void:
+	tick(dt)
 
 
 func setup(sim: HordeSim, player: Player, run, boss_damage_at: Callable) -> void:

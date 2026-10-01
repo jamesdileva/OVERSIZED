@@ -543,6 +543,7 @@ func _test_ability_caster() -> void:
 	var run := {"xp_magnet_radius": 90.0, "xp_mult": 1.0}
 	var boss_hits := []
 	var caster := AbilityCaster.new()
+	check(caster is Node2D, "caster is Node2D — child hazards inherit the player transform")
 	caster.setup(sim, player, run, func(pos: Vector2, radius: float, amount: float) -> void:
 		boss_hits.append(amount))
 	var vitality := _make_ability(&"vitality", "passive", 3, &"vitality")
