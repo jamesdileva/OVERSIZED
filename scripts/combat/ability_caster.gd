@@ -92,7 +92,7 @@ func _fire(def: UniversalAbilityDef, rank: int) -> void:
 		&"ground_slam":
 			var radius := 170.0 + 14.0 * float(rank - 1)
 			var dmg := def.magnitude * (1.0 + 0.5 * float(rank - 1))
-			_aoe(p, radius, dmg, 1.4)
+			_aoe(p, radius, dmg, 1.4, def.tags)
 			effect_visual.emit(&"ground_slam", p, radius)
 		&"lightning_strike":
 			var cands := _sim.grid.circle_candidates(p, 520.0)
@@ -100,18 +100,18 @@ func _fire(def: UniversalAbilityDef, rank: int) -> void:
 				return  # nobody in range: cooldown restarts, effect skips
 			var i: int = cands[randi() % cands.size()]
 			var pos: Vector2 = _sim.positions[i]
-			_sim.damage(i, def.magnitude * (1.0 + 0.4 * float(rank - 1)), Vector2.ZERO)
+			_sim.damage(i, def.magnitude * (1.0 + 0.4 * float(rank - 1)), Vector2.ZERO, def.tags)
 			effect_visual.emit(&"lightning_strike", pos, 60.0)
 		&"spirit_blade":
 			var blade := SpiritBlade.new()
-			blade.setup(_sim, def.magnitude * (1.0 + 0.35 * float(rank - 1)))
+			blade.setup(_sim, def.magnitude * (1.0 + 0.35 * float(rank - 1)), def.tags)
 			add_child(blade)
 			blade.global_position = p
 		_:
 			push_warning("unknown ability effect_id: %s" % def.effect_id)
 
 
-func _aoe(center: Vector2, radius: float, amount: float, knock_scale: float) -> void:
+func _aoe(center: Vector2, radius: float, amount: float, knock_scale: float, tag_mask: int) -> void:
 	for i in _sim.grid.circle_candidates(center, radius):
 		if i >= _sim.active_count:
 			continue
@@ -119,9 +119,9 @@ func _aoe(center: Vector2, radius: float, amount: float, knock_scale: float) -> 
 		if away.length_squared() > radius * radius:
 			continue
 		var push := away.normalized() if away.length() > 0.01 else Vector2.RIGHT
-		_sim.damage(i, amount, push * knock_scale)
+		_sim.damage(i, amount, push * knock_scale, tag_mask)
 	if _boss_damage_at.is_valid():
-		_boss_damage_at.call(center, radius, amount)
+		_boss_damage_at.call(center, radius, amount, tag_mask)
 
 
 func _refresh_passives() -> void:
@@ -129,6 +129,7 @@ func _refresh_passives() -> void:
 	var speed := 300.0
 	var magnet := 90.0
 	var xp_mult := 1.0
+	_sim.clear_damage_mods()  # recomputed from scratch with the stats
 	for id in _entries:
 		var e: Dictionary = _entries[id]
 		var def: UniversalAbilityDef = e["def"]
@@ -144,6 +145,8 @@ func _refresh_passives() -> void:
 				magnet += 45.0 * float(rank)
 			&"scholars_wit":
 				xp_mult += 0.10 * float(rank)
+			&"tag_amplifier":
+				_sim.add_increased(def.tags, def.magnitude * float(rank))
 	_player.set_max_hp(max_hp)
 	_player.move_speed = speed
 	_run.xp_magnet_radius = magnet
@@ -156,3 +159,4 @@ func _ensure_orbit() -> void:
 		add_child(_orbit)
 		_orbit.setup(_sim, _player)
 	_orbit.configure(int(_entries[&"orbit_blades"]["rank"]))
+	_orbit.tag_mask = _entries[&"orbit_blades"]["def"].tags

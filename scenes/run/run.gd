@@ -117,6 +117,11 @@ func _ready() -> void:
 			for def in ContentLoader.universal_abilities:
 				if def.kind == "active":
 					caster.bring_online(def)
+		if uargs.has("--burn"):
+			# guaranteed Fire Infusion: sword hits burn the horde (orange tint)
+			for d in ContentLoader.sword_upgrades:
+				if d.id == &"fire_infusion":
+					UpgradeEffects.apply(d, _upgrade_ctx())
 		for k in 30:
 			_spawn_one()
 		_shot_after(frames / 60.0)
@@ -356,6 +361,7 @@ func _on_combo_burst(center: Vector2) -> void:
 ## Shared AoE used by the combo burst (the caster's own _aoe covers ability
 ## casts); also reaches the boss.
 func caster_aoe(center: Vector2, radius: float, amount: float, knock_scale: float) -> void:
+	var mask := Tags.SLASH_BIT | (1 << Tags.Tag.BURST)
 	for i in sim.grid.circle_candidates(center, radius):
 		if i >= sim.active_count:
 			continue
@@ -363,13 +369,13 @@ func caster_aoe(center: Vector2, radius: float, amount: float, knock_scale: floa
 		if away.length_squared() > radius * radius:
 			continue
 		var push := away.normalized() if away.length() > 0.01 else Vector2.RIGHT
-		sim.damage(i, amount, push * knock_scale)
-	_boss_damage_at(center, radius, amount)
+		sim.damage(i, amount, push * knock_scale, mask)
+	_boss_damage_at(center, radius, amount, mask)
 
 
-func _boss_damage_at(pos: Vector2, radius: float, amount: float) -> void:
+func _boss_damage_at(pos: Vector2, radius: float, amount: float, tag_mask: int = 0) -> void:
 	if boss != null and boss.global_position.distance_to(pos) <= radius + boss.body_radius:
-		boss.take_damage(amount)
+		boss.take_damage(sim.modified(amount, tag_mask))
 		numbers.pop(boss.global_position, amount, false)
 
 

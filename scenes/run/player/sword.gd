@@ -14,11 +14,13 @@ extends Node2D
 signal combo_burst(center: Vector2)
 
 const AIM_RANGE := 620.0
+const BASE_MASK := Tags.SLASH_BIT   # the sword is inherently Slash; infusions add more
 
 var reach := 155.0
 var damage := 12.0
 var swing := SwordSwing.new()
 var combo := ComboCounter.new()
+var hit_tag_mask := 0               # elemental infusions add their tags here
 
 var _sim: HordeSim
 var _on_hit: Callable
@@ -70,6 +72,7 @@ func _aim_angle() -> float:
 func _sweep_hits() -> void:
 	var p := global_position
 	var reach_sq := (reach + 14.0) * (reach + 14.0)
+	var mask := BASE_MASK | hit_tag_mask
 	for i in _sim.grid.circle_candidates(p, reach):
 		if _hit_flags[i] == 1 or i >= _sim.active_count:
 			continue
@@ -82,7 +85,7 @@ func _sweep_hits() -> void:
 		# capture the victim's slot position before damage — a kill swap-removes
 		# the slot and the index would point at a different enemy afterwards
 		var hit_pos: Vector2 = _sim.positions[i]
-		var died := _sim.damage(i, damage, to.normalized())
+		var died := _sim.damage(i, damage, to.normalized(), mask)
 		_hits_this_swing += 1
 		if combo.register_hits(1):
 			combo_burst.emit(p)
@@ -91,7 +94,8 @@ func _sweep_hits() -> void:
 
 
 ## The boss is a single entity outside the pooled sim, so the sweep tests it
-## separately with the same reach + window rules, once per swing.
+## separately with the same reach + window rules, once per swing — applying
+## the sim's damage math itself (modified by tag mask) for parity.
 func _sweep_boss(p: Vector2) -> void:
 	if _boss_hit_this_swing or not boss_getter.is_valid():
 		return
@@ -104,8 +108,9 @@ func _sweep_boss(p: Vector2) -> void:
 	if not swing.in_hit_window(to.angle()):
 		return
 	_boss_hit_this_swing = true
+	var mask := BASE_MASK | hit_tag_mask
 	var hit_pos: Vector2 = b.global_position - to.normalized() * b.body_radius
-	b.take_damage(damage)
+	b.take_damage(_sim.modified(damage, mask))
 	_on_hit.call(hit_pos, damage, false)
 
 

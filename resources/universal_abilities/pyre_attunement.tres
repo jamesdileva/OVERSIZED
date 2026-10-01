@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"pyre_attunement"
+display_name = "Pyre Attunement"
+description = "+25% Fire damage per rank, to every source that carries the Fire tag — blade or flame alike."
+kind = "passive"
+ap_cost = 2
+unlock_level = 1
+tags = 1
+max_rank = 3
+cooldown = 0.0
+effect_id = &"tag_amplifier"
+magnitude = 0.25
+rarity_weight = 0.6

@@ -16,3 +16,4 @@ extends Resource
 @export var magnitude: float = 1.0
 @export var rarity_weight: float = 1.0
 @export var max_stacks: int = 0            # 0 = unlimited stacks
+@export var tags: int = 0                  # Tags bitmask (architecture.md §5.4)

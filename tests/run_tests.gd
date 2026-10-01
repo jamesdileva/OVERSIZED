@@ -32,6 +32,10 @@ func _initialize() -> void:
 	_test_ability_caster()
 	_test_meta_progression()
 	_test_game_manager_scenes()
+	_test_tags()
+	_test_statuses()
+	_test_damage_mods()
+	_test_tags_coverage()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -64,6 +68,7 @@ func _test_scripts_compile() -> void:
 		"res://scripts/combat/ability_caster.gd",
 		"res://scripts/combat/run_levels.gd",
 		"res://scripts/combat/boss_brain.gd",
+		"res://scripts/combat/tags.gd",
 		"res://scenes/run/wave_director/wave_director.gd",
 		"res://scenes/run/player/player.gd",
 		"res://scenes/run/player/sword.gd",
@@ -544,7 +549,7 @@ func _test_ability_caster() -> void:
 	var boss_hits := []
 	var caster := AbilityCaster.new()
 	check(caster is Node2D, "caster is Node2D — child hazards inherit the player transform")
-	caster.setup(sim, player, run, func(pos: Vector2, radius: float, amount: float) -> void:
+	caster.setup(sim, player, run, func(pos: Vector2, radius: float, amount: float, tag_mask: int) -> void:
 		boss_hits.append(amount))
 	var vitality := _make_ability(&"vitality", "passive", 3, &"vitality")
 	caster.bring_online(vitality)
@@ -612,3 +617,99 @@ func _test_game_manager_scenes() -> void:
 			all_exist = false
 	check(all_exist, "menu/run/summary/hub scenes all exist on disk")
 	gm.free()
+
+
+func _test_tags() -> void:
+	print("tags: mask/has round-trip, bits within the enum")
+	var m := Tags.mask([Tags.Tag.FIRE, Tags.Tag.SLASH, Tags.Tag.BURN])
+	check(Tags.has(m, Tags.Tag.FIRE) and Tags.has(m, Tags.Tag.SLASH) and Tags.has(m, Tags.Tag.BURN),
+			"mask preserves set tags")
+	check(not Tags.has(m, Tags.Tag.FROST), "unset tag not present")
+	check(m & ~Tags.ALL_MASK == 0, "mask fits within the enum's bits")
+
+
+func _test_statuses() -> void:
+	print("statuses: applied from hit tags, DoT kills, chill slows, decay clears")
+	var sim := HordeSim.new(64)
+	var deaths := [0]
+	sim.enemy_killed.connect(func(_at: Vector2) -> void: deaths[0] += 1)
+	var idx := sim.spawn(Vector2.ZERO)
+	sim.damage(idx, 25.0, Vector2.ZERO, Tags.FIRE_BIT)  # 5 HP left; Burn deals 18 over 3s
+	check(sim.status_mask[idx] & Tags.BURN_BIT != 0, "FIRE-tagged hit applies Burn")
+	sim.damage(idx, 1.0, Vector2.ZERO, Tags.FROST_BIT)
+	check(sim.status_mask[idx] & Tags.CHILL_BIT != 0, "FROST-tagged hit applies Chill")
+	# burn DoT: 6 dps ticked at 0.5s intervals — 30 hp + burn takes ~3s
+	var steps := 0
+	while sim.active_count > 0 and steps < 600:
+		sim.step(1.0 / 60.0, Vector2(9999, 9999))
+		steps += 1
+	check(sim.active_count == 0 and deaths[0] == 1, "Burn's damage-over-time killed the enemy")
+	# chill slows seek speed
+	var sim2 := HordeSim.new(16)
+	var slow := sim2.spawn(Vector2(500, 0))
+	sim2.damage(slow, 0.0, Vector2.ZERO, Tags.FROST_BIT)
+	sim2.step(1.0 / 60.0, Vector2.ZERO)
+	var d_chilled: float = sim2.positions[slow].length()
+	var sim3 := HordeSim.new(16)
+	var fast := sim3.spawn(Vector2(500, 0))
+	sim3.step(1.0 / 60.0, Vector2.ZERO)
+	var d_normal: float = sim3.positions[fast].length()
+	check(d_chilled > d_normal, "chilled enemy moved less than unchilled")
+	# decay: statuses expire after STATUS_DURATION
+	var sim4 := HordeSim.new(16)
+	var s := sim4.spawn(Vector2.ZERO)
+	sim4.damage(s, 0.0, Vector2.ZERO, Tags.FIRE_BIT)
+	for f in int(3.5 * 60.0):
+		sim4.step(1.0 / 60.0, Vector2(9999, 9999))
+	check(sim4.status_mask[s] == 0, "statuses decay to zero after the duration")
+
+
+func _test_damage_mods() -> void:
+	print("damage mods: increased per-tag additive, more multiplicative, capped")
+	var sim := HordeSim.new(16)
+	sim.add_increased(Tags.FIRE_BIT, 0.25)
+	check(absf(sim.modified(100.0, Tags.FIRE_BIT) - 125.0) < 0.01, "increased adds +25% on matching tag")
+	check(absf(sim.modified(100.0, Tags.FROST_BIT) - 100.0) < 0.01, "no effect on unmatched tags")
+	var both := Tags.FIRE_BIT | Tags.FROST_BIT
+	sim.add_increased(Tags.FROST_BIT, 0.5)
+	check(absf(sim.modified(100.0, both) - 175.0) < 0.01, "multiple matched tags sum additively")
+	check(sim.add_more(1.2), "first 'more' accepted")
+	check(absf(sim.modified(100.0, both) - 210.0) < 0.01, "'more' multiplies after 'increased'")
+	for k in 5:
+		sim.add_more(1.1)
+	check(sim.more_list.size() == 4, "'more' list capped at 4 sources")
+
+
+func _test_tags_coverage() -> void:
+	print("content: all def tags valid; Fire/Frost/Blood producers exist")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	var all_valid := true
+	var fire := 0
+	var frost := 0
+	var blood := 0
+	var defs := []
+	defs.append_array(loader.sword_upgrades)
+	defs.append_array(loader.universal_abilities)
+	for def in defs:
+		if def.tags & ~Tags.ALL_MASK != 0:
+			all_valid = false
+		if def.tags & Tags.FIRE_BIT:
+			fire += 1
+		if def.tags & Tags.FROST_BIT:
+			frost += 1
+		if def.tags & Tags.BLOOD_BIT:
+			blood += 1
+	check(all_valid, "every def's tags fit within the enum")
+	check(fire >= 1 and frost >= 1 and blood >= 1,
+			"each implemented status element has a producer (Fire %d, Frost %d, Blood %d)" % [fire, frost, blood])
+	# infusion application: picking Fire Infusion puts FIRE on the sword's hits
+	var sword := Sword.new()
+	var ctx := {"sword": sword, "sim": HordeSim.new(8), "player": null, "run": {"leech_on_kill": 0.0}}
+	var infuse: SwordUpgradeDef = loader.sword_upgrades[0]
+	for d in loader.sword_upgrades:
+		if d.id == &"fire_infusion":
+			infuse = d
+	UpgradeEffects.apply(infuse, ctx)
+	check(sword.hit_tag_mask & Tags.FIRE_BIT != 0, "Fire Infusion adds FIRE to the sword's hit mask")
+	sword.free()

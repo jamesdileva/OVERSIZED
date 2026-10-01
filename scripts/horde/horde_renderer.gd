@@ -39,13 +39,22 @@ func _process(_delta: float) -> void:
 	var n := _sim.active_count
 	var positions := _sim.positions
 	var flashes := _sim.hit_flash
+	var statuses := _sim.status_mask
 	for i in n:
 		_multimesh.set_instance_transform_2d(i, Transform2D(0.0, positions[i]))
 		var f := flashes[i]
+		var col := _dot_color
+		# status tints from the tag→color language; flash wins on top
+		var s := statuses[i]
+		if s & Tags.BURN_BIT:
+			col = col.lerp(Tags.COLORS[Tags.Tag.BURN], 0.65)
+		elif s & Tags.CHILL_BIT:
+			col = col.lerp(Tags.COLORS[Tags.Tag.CHILL], 0.65)
+		elif s & Tags.BLEED_BIT:
+			col = col.lerp(Tags.COLORS[Tags.Tag.BLEED], 0.65)
 		if f > 0.0:
-			_multimesh.set_instance_color(i, _dot_color.lerp(_flash_color, f))
-		else:
-			_multimesh.set_instance_color(i, _dot_color)
+			col = col.lerp(_flash_color, f)
+		_multimesh.set_instance_color(i, col)
 	_multimesh.visible_instance_count = n
 
 

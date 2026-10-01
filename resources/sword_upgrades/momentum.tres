@@ -12,3 +12,4 @@ effect_id = &"momentum"
 magnitude = 0.5
 rarity_weight = 1.0
 max_stacks = 3
+tags = 4194336

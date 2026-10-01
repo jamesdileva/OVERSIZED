@@ -15,6 +15,11 @@ static func apply(def: SwordUpgradeDef, ctx: Dictionary) -> void:
 	match def.effect_id:
 		&"reach_up":
 			sword.reach += def.magnitude
+		&"infuse":
+			# elemental infusion: the sword's hits carry this def's tags, and
+			# the pipeline turns FIRE/FROST/BLOOD into statuses — new elements
+			# later are pure .tres with no code change
+			sword.hit_tag_mask |= def.tags
 		&"wide_arc":
 			sword.swing.arc_half_angle = minf(sword.swing.arc_half_angle + def.magnitude, PI * 0.95)
 		&"swift_strikes":

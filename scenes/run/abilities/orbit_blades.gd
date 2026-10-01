@@ -17,6 +17,7 @@ var _radius := 90.0
 var _damage := 8.0
 var _angle := 0.0
 var _tick_left := TICK_INTERVAL
+var tag_mask := 0
 
 
 func setup(sim: HordeSim, player: Player) -> void:
@@ -45,7 +46,7 @@ func tick_damage(dt: float) -> void:
 		var away: Vector2 = _sim.positions[i] - p
 		if away.length_squared() > reach * reach:
 			continue
-		_sim.damage(i, _damage, away.normalized())
+		_sim.damage(i, _damage, away.normalized(), tag_mask)
 
 
 func _process(dt: float) -> void:

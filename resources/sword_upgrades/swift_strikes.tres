@@ -12,3 +12,4 @@ effect_id = &"swift_strikes"
 magnitude = 0.12
 rarity_weight = 1.0
 max_stacks = 5
+tags = 32

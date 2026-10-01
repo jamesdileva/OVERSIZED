@@ -4,12 +4,12 @@
 
 [resource]
 script = ExtResource("1_def")
-id = &"leech"
-display_name = "Leech"
-description = "Heal 2 HP on every kill. The crowd is a snack."
+id = &"fire_infusion"
+display_name = "Fire Infusion"
+description = "Your blade lights enemies alight — every hit applies Burn (orange tint, damage over time)."
 effect_type = "on_hit_effect"
-effect_id = &"leech"
-magnitude = 2.0
-rarity_weight = 0.8
-max_stacks = 4
-tags = 2379312
+effect_id = &"infuse"
+magnitude = 0.0
+rarity_weight = 0.7
+max_stacks = 1
+tags = 131105

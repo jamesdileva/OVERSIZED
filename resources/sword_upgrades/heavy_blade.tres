@@ -12,3 +12,4 @@ effect_id = &"heavy_blade"
 magnitude = 6.0
 rarity_weight = 1.0
 max_stacks = 0
+tags = 32

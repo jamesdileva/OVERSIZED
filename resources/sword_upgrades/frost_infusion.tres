@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SwordUpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/sword_upgrade_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"frost_infusion"
+display_name = "Frost Infusion"
+description = "Your blade carries a killing frost — every hit applies Chill (cyan tint, 35% slower enemies)."
+effect_type = "on_hit_effect"
+effect_id = &"infuse"
+magnitude = 0.0
+rarity_weight = 0.7
+max_stacks = 1
+tags = 131106

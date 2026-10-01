@@ -12,3 +12,4 @@ effect_id = &"spin_finisher"
 magnitude = 4.0
 rarity_weight = 0.6
 max_stacks = 3
+tags = 32

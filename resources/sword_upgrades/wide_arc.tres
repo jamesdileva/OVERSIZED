@@ -12,3 +12,4 @@ effect_id = &"wide_arc"
 magnitude = 0.26
 rarity_weight = 1.0
 max_stacks = 4
+tags = 32

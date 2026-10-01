@@ -13,11 +13,13 @@ var _sim: HordeSim
 var _damage := 14.0
 var _life := LIFETIME
 var _dir := Vector2.RIGHT
+var tag_mask := 0
 
 
-func setup(sim: HordeSim, damage: float) -> void:
+func setup(sim: HordeSim, damage: float, p_tag_mask: int = 0) -> void:
 	_sim = sim
 	_damage = damage
+	tag_mask = p_tag_mask
 
 
 func _physics_process(dt: float) -> void:
@@ -41,7 +43,7 @@ func _physics_process(dt: float) -> void:
 		if i >= _sim.active_count:
 			continue
 		if _sim.positions[i].distance_squared_to(global_position) <= HIT_RADIUS * HIT_RADIUS:
-			_sim.damage(i, _damage, _dir)
+			_sim.damage(i, _damage, _dir, tag_mask)
 			queue_free()
 			return
 	queue_redraw()

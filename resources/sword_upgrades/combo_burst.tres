@@ -12,3 +12,4 @@ effect_id = &"combo_burst"
 magnitude = 15.0
 rarity_weight = 0.6
 max_stacks = 3
+tags = 131200

@@ -12,3 +12,4 @@ effect_id = &"reach_up"
 magnitude = 25.0
 rarity_weight = 1.0
 max_stacks = 0
+tags = 32
