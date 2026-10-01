@@ -144,7 +144,45 @@ One entry per completed sprint, appended in order. Format per `AGENTS.md`: scope
 - XP/leveling + Universal Ability picks + the wave-10 boss (Sprint 1.2); Runeshards/Glory + meta hub + save (1.3); new enemy types (Phase 2); real art.
 - Choice-screen polish (card icons, rarity colors) — deferred until ability picks share the component.
 
-**Next**: Sprint 1.2 — leveling + Universal Ability picks + the first boss (XP pickups, level-up offers through the same choice screen, 5–8 abilities with cooldown timers, wave-10 boss with telegraphed patterns).
+**Next**: Sprint 1.3 — meta loop + run-loop polish: death → Run Summary (Hero XP + Glory) → minimal hub with a stub loadout screen → menu, basic save/load with `schema_version`, restart flow. That closes the full Vertical Slice Definition of Done loop.
+
+---
+
+## Sprint 1.3 — Meta loop + run-loop polish (2026-09-29) — VERTICAL SLICE COMPLETE
+
+**Scope** (from `sprint-roadmap.md`, Phase 1 — Sprint 1.3, approved before build): GameManager state machine; main menu; Run Summary with rewards; Meta Hub with loadout stub; `MetaProgression` save system with `schema_version`; death-flow rework; the long-session bot smoke test. All five pre-approved defaults held (GameManager now, Hero Level as number+curve, one JSON save with corrupt-fallback, R stays instant-restart, time-accelerated bot).
+
+**Built**
+
+- `autoload/game_manager.gd` — the formal Menu → Run → Summary → Hub state machine (architecture §7), scene transitions, automation skips (launch flags jump straight into the run), bot elapsed-time bookkeeping (survives run reloads), and `--ui_shot` capture mode for the UI scenes.
+- `autoload/meta_progression.gd` — one JSON save in `user://` carrying **`schema_version` from the very first write** (the §10 hard rule, finally exercised); `load_save` resets to defaults before parsing, so corrupt or newer-versioned files yield a fresh profile instead of half-state or a crash; `record_run` applies Hero XP (~waves×8 + kills×0.3 + bosses×25) and Glory (~waves×2 + kills/10 + bosses×10), tracked best-wave/totals, saves.
+- `scenes/ui/` — main menu (title, Start Run, Quit), Run Summary (stat block + rewards + Continue), Meta Hub (Hero Level progress bar, Glory/stats, Start Run, **loadout stub** naming Sprint 2.2, Back to Menu). All gamepad-first: first button focused, `ui_*` navigation.
+- Death flow: death → "YOU DIED" → Summary → Hub → Menu. R mid-run remains an instant dev-restart.
+- **Bot smoke test** (`--bot <minutes>`): invulnerable nearest-enemy-seeking bot at 8× time acceleration, auto-picking every choice screen, auto-restarting on (now impossible) death, logging fps/memory every 60 sim-seconds.
+
+**Verified**
+
+- Tests: **61/61 pass** — meta save round-trip, `schema_version` present in the first write, corrupt-JSON fallback to fresh, newer-schema fallback, scene existence per state, plus all prior suites.
+- Boot-check headless: zero script errors (now boots the menu).
+- Bench: 8000 → 90.7 ms — ceiling holds.
+- **Bot smoke test: 900 sim-seconds (15 min), wave 10 reached, 1,346 kills, zero script errors, memory flat 30.9 → 31.1 MB, fps pinned at the headless cap.** Full progression exercised: wave clears, auto-picked upgrades, auto-picked level-ups with passives online, the wave-10 boss.
+- UI screenshots (`docs/media/`): menu, hub (level progress + stats + stub), summary (stat block + rewards).
+
+**Findings worth keeping**
+
+- **The kamikaze-bot lesson**: a naive "move toward nearest enemy" bot dies on contact every few seconds, so a 15-minute session never leaves wave 1 — it exercises death/reload but none of the progression systems. The bot is now invulnerable so the session covers choices, abilities, passives, and the boss. A smoke test must exercise the systems you're worried about, not just run for a long time.
+- **The bot's first auto-picked passive caught a real 1.2 bug within minutes**: `AbilityCaster` writes `xp_magnet_radius`/`xp_mult` onto the run scene, which never declared those members — the 1.2 tests used a fake dictionary for the run context, and no human had picked Lodestone yet. Two fixes: the missing vars, and a durable lesson — test doubles should be the same type as the real thing (or the code should take plain params) so member typos can't hide.
+- Bot/automation runs deliberately skip `record_run` so test sessions never pollute the real meta save.
+
+**Decisions & deviations**
+
+- All five pre-approved defaults held; no scope additions crept in.
+- Hub Glory display shows the balance only — spending arrives with cosmetics (2.5).
+
+**Vertical Slice DoD — every element now true**: one hero; base swing + ≥5 upgrades across a run; ≥5 Universal Abilities available; waves 1–10 playable; unique wave-10 boss; death → summary → currency → hub → menu loop; gamepad-playable throughout; 15-minute session with no crashes (bot-verified). The slice is functionally complete on placeholder art.
+
+**Next**: Phase 2 per the roadmap — Sprint 2.1 (tag & effect foundation: `Tags` bitmask on hit events, two-category damage math, three statuses in the horde layer) is the "never cut" foundation everything else builds on. Before that: both of us play the slice end-to-end and log feel/pace issues to carry into 2.x tuning.
+
 
 ---
 
