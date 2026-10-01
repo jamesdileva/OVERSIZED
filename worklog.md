@@ -238,6 +238,43 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 
 **Next**: Sprint 2.2 — Hero Level, AP, and loadouts: `ProgressionCurve` resource, Hero XP at run end driving roster unlocks, the loadout screen (AP bar, slot cap, free respec, presets), opening-ability pick, level-up offers drawing from the equipped loadout, save schema additions.
 
+---
+
+## Sprint 2.2 — Hero Level, AP, and loadouts (2026-10-01)
+
+**Scope** (from `sprint-roadmap.md`, Phase 2 — Sprint 2.2, approved before build): `ProgressionCurve` resource; roster unlocks by level; passives online from run start; AP budget + loadout screen (AP bar, slot cap, free respec, 3 presets); opening-ability pick; level-up offers from the equipped loadout; save schema v2. Art lane: loadout screen placeholders + the `AudioBus` voice-limiting skeleton.
+
+**Built**
+
+- `ProgressionCurve` resource (`resources/progression/progression_curve.tres`): `xp_required[]` (100 + 80/level, matching 1.3's pacing), `ap_budget[]` (5 at L1 → 14 at L10 → 24 at L20 → 36 at L50, per the deep-dive table), `slot_cap` 12, and `roster_unlocks{level: ids}` (2 actives at L1, then a mixed cadence to 11 abilities by L22). The whole progression feel is one data file.
+- `MetaProgression` v2 (schema 2): `loadouts` + `last_loadout_index` persisted; schema-1 saves load with defaults; `owned_abilities()` derives from the curve; **`equip()` enforces the rules** (not-double-equipped, slot cap, AP budget) and returns reason strings; free instant respec; `save_slot_as`/`select_slot` presets; `set_hero_level()` for simulation; cost lookup injectable for tests.
+- Run flow: equipped loadout drives everything — **passives are online from run start at rank 1** (recompute handles Plating/Regeneration now too), the **opening-ability pick** (1 card, 2 from Hero Level 20+) pauses the run before wave 1, and **level-up cards draw from the equipped loadout only** (empty pool skips the pause).
+- Loadout screen: AP bar, owned/equipped columns with click-to-toggle, error line for refused equips, 3 preset rows, Back to Hub. Reached from the hub (a sub-screen, so the documented state machine stays 4 states). Hub's Loadout button is real now.
+- Two new passives: **Plating** (6% damage reduction/rank) and **Regeneration** (2 HP/s/rank) — player got `armor`/`regen_ps`. Ground Slam and Lightning Strike now cost **5 AP** (build-defining tier) so the L20 crunch bites: 10 owned cost 26 AP against a 24 budget.
+- `AudioBus` autoload skeleton: Music/SFX/UI buses created at boot, `register_sound`/`can_play`/`finished` voice-limit + retrigger-interval API for the 2.4 SFX pass.
+- Debug: hub console gained `hero_level <n>` (the DoD's simulator) and `give_glory`; automation gained `--hero_level <n>` and `--to loadout` screenshot targets.
+
+**Verified**
+
+- Tests: **79/79 pass** — curve key rows (5/14/24 AP at L1/10/20), roster counts (5 owned at L10, 10 at L20, 11 at L22), **L10 default kit costs exactly 14/14 (all equippable)**, **L20 greedy fills 9 of 10 (crunch)**, equip refusal reasons, preset round-trip, audio voice/interval limits, plus all prior suites. Boot clean; bot 3 sim-min: wave 6 / 412 kills with the loadout-driven run.
+- DoD evidence: `docs/media/sprint-2.2-loadout-l10.png` and `-l20.png` — the L20 screen shows **AP 21/24 with Lightning Strike stranded in Owned**, presets visible.
+
+**Findings worth keeping**
+
+- **JSON.stringify sorts dictionary keys alphabetically** — the 1.3-era `"schema_version": 1` substring check silently went stale when the version bumped to 2 (the key moved to the middle of the file). Tests that assert serialized text should assert the semantic value (parse it) or stay version-agnostic.
+- **Planned .tres edits need the same rigor as code**: I changed Ground Slam/Lightning to 5 AP in my head and in tests, but not in the files — two test cycles lost. Costs are data; data changes get grepped like code now (`ap_cost`, `unlock_level` synced with the curve).
+- **The default loadout is a snapshot, not a subscription**: it fills greedily once (cheapest-first), so newly unlocked abilities appear in the loadout screen's Owned column rather than silently joining your kit — deliberate, since a curated kit shouldn't mutate behind the player's back. `set_hero_level` (debug) resets it so simulations reflect the new roster.
+- L1 with 5 AP owns 8 AP of actives — the player's very first choice is which active to bring. That's a feature (the own-vs-equip gap starts immediately), but worth watching in the 2.4 playtest that L1 doesn't feel restrictive.
+
+**Deferred**
+
+- Rename loadouts / delete preset slots (only save+select shipped) — UI polish, not blocking.
+- unlock_level display in the loadout UI (levels where a locked ability would appear); trophy abilities (per deep-dive, later).
+- Reactive SFX through AudioBus (2.4); reactions/resonance/evolutions (2.4).
+
+**Next**: Sprint 2.3 — enemy variety & bosses: 8-10 enemy types with behavior tags, spawn-composition curves per wave range, bosses at waves 20/30 with telegraphed patterns, `champion_modifier_slots` wired, enemy animation via MultiMesh custom data — plus the art-lane timing exercise (first three enemies) that rescales the whole art budget.
+
+
 
 
 
