@@ -148,6 +148,45 @@ One entry per completed sprint, appended in order. Format per `AGENTS.md`: scope
 
 ---
 
+## Sprint 1.2 — Leveling + Universal Ability picks + wave-10 boss (2026-09-29)
+
+**Scope** (from `sprint-roadmap.md`, Phase 1 — Sprint 1.2, approved before build; first sprint under the deep-dive-merged docs): XP/leveling; 8 abilities on the new `UniversalAbilityDef` schema (`kind`/`ap_cost`/`unlock_level`/`tags`/`max_rank`); wave-10 boss with telegraphed patterns. Pre-approved defaults: passives come via level-up cards until loadouts land (2.2), XP is physical pickups, boss waves clear on boss death with an enrage soft-timer, overlapping choices queue.
+
+**Built**
+
+- `UniversalAbilityDef` schema + 8 abilities as `.tres`: actives **Orbiting Blades** (persistent hazard, no cooldown), **Ground Slam**, **Spirit Blade** (homing projectile), **Lightning Strike**; passives **Vitality**, **Swift Boots**, **Lodestone**, **Scholar's Wit**. Tags ride as data (behavior in 2.1/2.4); `ap_cost`/`unlock_level` inert until Hero Level (2.2).
+- `AbilityCaster` (pure-ish node): cooldown ticking, from-scratch passive recompute (reset bases → reapply — no delta bookkeeping), persistent orbit node management, AoE + boss-damage callbacks; visuals delegated to the run via `effect_visual` so tests run headless.
+- XP: `XpGems` pooled pickups (magnet radius, ring-slot reuse) fed by `sim.enemy_killed`; `RunLevels` pure XP curve (`5 + 6n + n²` per level); level-ups open 3 ability cards through the shared choice screen; overlapping level-ups queue behind an open choice.
+- Choice screen generalized: `open(title, offers, owned)` + the offer roller duck-types `max_stacks`/`max_rank`, so both def types share one component.
+- Wave-10 boss: `BossDef` resource (with reserved `champion_modifier_slots`), `BossBrain` pure phases (66%/33%) + enrage soft timer, `Boss` node with alternating telegraphed charge/slam in the hostile hue, boss-only wave-clear, magenta boss HP bar; waves 6–10 authored (wave 10 references the boss); sword sweeps + ability AoEs damage the boss via a callback (it's deliberately outside the pooled sim).
+- HUD: XP bar + level, boss bar; console gained `give_xp`.
+
+**Verified**
+
+- Tests: **51/51 pass** — content (8 upgrades + 8 abilities + waves 1–10 + wave-10 boss reference), RunLevels monotonicity/round-trip, BossBrain phase boundaries (66.7% still phase 1, enrage at timer, per-phase speed), AbilityCaster (Vitality 120→140 HP, Swift Boots 324 speed, ground-slam fire damages in range, cooldown reset, max-rank refusal), duck-typed roller excludes maxed abilities.
+- Boot-check headless: zero script errors. Bench: 2000 → 16.6 ms (≈60 fps) — ceiling holds.
+- Screenshots (`docs/media/`): the **LEVEL 2 — CHOOSE AN ABILITY** screen with boss bar visible, and the boss fight (Warden engaged, sword connecting, HP bar dented).
+
+**Findings worth keeping**
+
+- **Typed signals reject sibling types at runtime**: `EventBus.upgrade_selected(def: SwordUpgradeDef)` errored the moment a UniversalAbilityDef was emitted. Cross-def signals are now untyped by design — typed signals are for single-type contracts.
+- `.tres` loads return **Resource instances**, not GDScripts — `can_instantiate()` doesn't exist on them; content tests assert fields instead.
+- The old `EventBus`/duck-typing work confirms the 1.1 harness guard pays off: this sprint's parse errors surfaced in the import log immediately, and no test silently skipped.
+- Interim passive model (cards) is one flag away from the 2.2 model: `AbilityCaster._refresh_passives` recomputes from the taken map, so "equipped-only" becomes a filter on that map, nothing else.
+
+**Decisions & deviations**
+
+- All four pre-approved defaults held (interim passive cards, XP pickups, boss-death-only clear + enrage speedup, choice queueing).
+- UniversalAbilityDef gained `rarity_weight` — the duck-typed roller needs it, and 2.4's synergy bias multiplies it.
+- The automated shot mode gained `--boss` (jumps to wave 10); captures showed the level-up screen arrives before the wave-1 clear in normal mode, so ability-screen evidence comes from boss-mode runs.
+
+**Deferred**
+
+- Run Summary → hub → save (Sprint 1.3 closes the vertical-slice meta loop with Hero XP + Glory).
+- Loadout/AP gating + passives-on-from-start (2.2); tag behavior (2.1); new enemy types (2.3).
+- Boss telegraph variety (one charge + one slam now); champion modifiers (2.3+).
+
+**Next**: Sprint 1.3 — meta loop + run-loop polish: death → Run Summary (Hero XP + Glory) → minimal hub with a stub loadout screen → menu, basic save/load with `schema_version`, restart flow. That closes the full Vertical Slice Definition of Done loop.
 ## Sprint 1.3 — Meta loop + run-loop polish (2026-09-29) — VERTICAL SLICE COMPLETE
 
 **Scope** (from `sprint-roadmap.md`, Phase 1 — Sprint 1.3, approved before build): GameManager state machine; main menu; Run Summary with rewards; Meta Hub with loadout stub; `MetaProgression` save system with `schema_version`; death-flow rework; the long-session bot smoke test. All five pre-approved defaults held (GameManager now, Hero Level as number+curve, one JSON save with corrupt-fallback, R stays instant-restart, time-accelerated bot).
@@ -280,45 +319,39 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 
 ---
 
-## Sprint 1.2 — Leveling + Universal Ability picks + wave-10 boss (2026-09-29)
+---
 
-**Scope** (from `sprint-roadmap.md`, Phase 1 — Sprint 1.2, approved before build; first sprint under the deep-dive-merged docs): XP/leveling; 8 abilities on the new `UniversalAbilityDef` schema (`kind`/`ap_cost`/`unlock_level`/`tags`/`max_rank`); wave-10 boss with telegraphed patterns. Pre-approved defaults: passives come via level-up cards until loadouts land (2.2), XP is physical pickups, boss waves clear on boss death with an enrage soft-timer, overlapping choices queue.
+## Sprint 2.3 — Enemy variety & bosses (2026-10-01)
+
+**Scope** (from `sprint-roadmap.md`, Phase 2 — Sprint 2.3, approved before build): 8 enemy types across five behaviors; spawn composition per wave range; bosses at waves 20/30; `champion_modifier_slots` wired; enemy animation via MultiMesh custom data. Also: `PLAYTEST.md` created (the running batch-playtest list the user requested) with checkpoint guidance — short session after 2.3, full batch after 2.4.
 
 **Built**
 
-- `UniversalAbilityDef` schema + 8 abilities as `.tres`: actives **Orbiting Blades** (persistent hazard, no cooldown), **Ground Slam**, **Spirit Blade** (homing projectile), **Lightning Strike**; passives **Vitality**, **Swift Boots**, **Lodestone**, **Scholar's Wit**. Tags ride as data (behavior in 2.1/2.4); `ap_cost`/`unlock_level` inert until Hero Level (2.2).
-- `AbilityCaster` (pure-ish node): cooldown ticking, from-scratch passive recompute (reset bases → reapply — no delta bookkeeping), persistent orbit node management, AoE + boss-damage callbacks; visuals delegated to the run via `effect_visual` so tests run headless.
-- XP: `XpGems` pooled pickups (magnet radius, ring-slot reuse) fed by `sim.enemy_killed`; `RunLevels` pure XP curve (`5 + 6n + n²` per level); level-ups open 3 ability cards through the shared choice screen; overlapping level-ups queue behind an open choice.
-- Choice screen generalized: `open(title, offers, owned)` + the offer roller duck-types `max_stacks`/`max_rank`, so both def types share one component.
-- Wave-10 boss: `BossDef` resource (with reserved `champion_modifier_slots`), `BossBrain` pure phases (66%/33%) + enrage soft timer, `Boss` node with alternating telegraphed charge/slam in the hostile hue, boss-only wave-clear, magenta boss HP bar; waves 6–10 authored (wave 10 references the boss); sword sweeps + ability AoEs damage the boss via a callback (it's deliberately outside the pooled sim).
-- HUD: XP bar + level, boss bar; console gained `give_xp`.
+- `EnemyDef` resource: stats, behavior (chaser/swarmer/tank/ranged/exploder), tint, scale, xp_value, and **composition data on the def itself** (`min_wave` + `spawn_weight`) — a type joins the weighted spawn pool when the wave reaches its min_wave. Decision: composition lives on defs rather than per-WaveDef dictionaries; WaveDef.composition override reserved.
+- **8 enemy types as .tres**: Chaser (baseline), Swarmer/Sprinter (fast, fragile), Brute/Bruiser (tanks), Spitter/Longshot (ranged), Popper (exploder).
+- `HordeGroup` facade: one `HordeSim` per archetype (one MultiMesh archetype each, §6.4), weighted composition spawning, per-sim swing flags, shared damage-mod pool, `step_all`. Sword/caster/hazards refactored onto the group.
+- New behaviors in the sim: **ranged** (holds attack_range, fires on interval → `shot` signal → `HostileProjectiles` pool in the hostile hue) and **exploder** (arms inside trigger range, white-hot windup, detonates → `exploded` signal, self-consumes with **no kill credit** — no XP for suicides).
+- Bosses: **The Tide Tyrant** (wave 20) and **Dreadwake, Champion of the Deep** (wave 30) — Dreadwake wears **2 champion slots** as the live champion-modifier proof (+40% HP, +16% speed, faster enrage). Waves 11-30 authored with per-wave composition/difficulty scaling.
+- Enemy animation via MultiMesh custom data: per-slot phase written once at setup, a canvas shader bobs instances from TIME — the pipeline sprite-frame selection will reuse (`implementation-guide.md` §16.3 lane).
+- Automation: `--start_wave <n>` jumps the run to any wave (DoD verification); `--hero_level <n>` simulation flag.
 
 **Verified**
 
-- Tests: **51/51 pass** — content (8 upgrades + 8 abilities + waves 1–10 + wave-10 boss reference), RunLevels monotonicity/round-trip, BossBrain phase boundaries (66.7% still phase 1, enrage at timer, per-phase speed), AbilityCaster (Vitality 120→140 HP, Swift Boots 324 speed, ground-slam fire damages in range, cooldown reset, max-rank refusal), duck-typed roller excludes maxed abilities.
-- Boot-check headless: zero script errors. Bench: 2000 → 16.6 ms (≈60 fps) — ceiling holds.
-- Screenshots (`docs/media/`): the **LEVEL 2 — CHOOSE AN ABILITY** screen with boss bar visible, and the boss fight (Warden engaged, sword connecting, HP bar dented).
+- Tests: **90/90 pass** — enemy defs/behaviors, composition gating (only wave-1 types at wave 1; ≥5 types by wave 12), ranged hold-and-fire, exploder detonate/self-consume/no-credit, champion HP math, plus all prior suites.
+- Bot deep-wave run: `--bot 6 --hero_level 20 --start_wave 24` → **waves 24-30, 926 kills, fps 145, memory flat** — waves 1-30 playable at target frame rate (DoD).
+- Screenshots: the wave-8 mix (Brute/Bruiser/Spitter/Popper/Sprinter visibly distinct around the sword) and the wave-30 champion fight; level-up shots show loadout-driven offers with "owned ×1" markers.
 
 **Findings worth keeping**
 
-- **Typed signals reject sibling types at runtime**: `EventBus.upgrade_selected(def: SwordUpgradeDef)` errored the moment a UniversalAbilityDef was emitted. Cross-def signals are now untyped by design — typed signals are for single-type contracts.
-- `.tres` loads return **Resource instances**, not GDScripts — `can_instantiate()` doesn't exist on them; content tests assert fields instead.
-- The old `EventBus`/duck-typing work confirms the 1.1 harness guard pays off: this sprint's parse errors surfaced in the import log immediately, and no test silently skipped.
-- Interim passive model (cards) is one flag away from the 2.2 model: `AbilityCaster._refresh_passives` recomputes from the taken map, so "equipped-only" becomes a filter on that map, nothing else.
-
-**Decisions & deviations**
-
-- All four pre-approved defaults held (interim passive cards, XP pickups, boss-death-only clear + enrage speedup, choice queueing).
-- UniversalAbilityDef gained `rarity_weight` — the duck-typed roller needs it, and 2.4's synergy bias multiplies it.
-- The automated shot mode gained `--boss` (jumps to wave 10); captures showed the level-up screen arrives before the wave-1 clear in normal mode, so ability-screen evidence comes from boss-mode runs.
+- **Signal arity errors print as `ERROR`, not `SCRIPT ERROR`** — a 2-arg closure connected to a 1-arg signal silently killed every kill-credit increment (bot: 0 kills in 6 minutes) while all SCRIPT ERROR greps came back clean. Verification greps must match `ERROR` broadly.
+- **The `ctx["sim"]` → `ctx["group"]` rename broke `UpgradeEffects.apply` exactly like the 1.2 playtest predicted** — context-dictionary keys are part of the contract; renaming a key without grepping implementers breaks at runtime, at wave clear, every time.
+- **Autoload `_ready` may not call `change_scene_to_file` directly** — the initial scene is still being added; the busy-parent guard fires. `goto.call_deferred(...)` fixes it.
+- Exploder self-destructs grant no XP by design; revisit if they feel unrewarding to fight.
 
 **Deferred**
 
-- Run Summary → hub → save (Sprint 1.3 closes the vertical-slice meta loop with Hero XP + Glory).
-- Loadout/AP gating + passives-on-from-start (2.2); tag behavior (2.1); new enemy types (2.3).
-- Boss telegraph variety (one charge + one slam now); champion modifiers (2.3+).
+- Boss pattern variety beyond charge+slam (a third pattern per boss would help 3.x); champion slot effects beyond HP/speed (elemental auras etc. per architecture §9).
+- Spawn composition as per-WaveDef overrides (current def-level min_wave/weight covers the roadmap's "curves per wave range").
+- Art-lane timing exercise (first three enemies) — lands with the first real pixel-art sprint; the asset tracker CSV stub with it.
 
-**Next**: Sprint 1.3 — meta loop + run-loop polish: death → Run Summary (Hero XP + Glory) → minimal hub with a stub loadout screen → menu, basic save/load with `schema_version`, restart flow. That closes the full Vertical Slice Definition of Done loop.
-
-
-
+**Next**: Sprint 2.4 — the synergy layer (reactions: Steam Burst/Shatter/Blood Boil; resonance tier-1; reroll/banish; synergy-biased offers; evolution framework + one working example; proc guardrails). **Playtest checkpoint after this sprint** — the full `PLAYTEST.md` batch.
