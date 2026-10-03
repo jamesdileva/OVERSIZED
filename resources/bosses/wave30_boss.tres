@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BossDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/boss_def.gd" id="1_boss"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"dreadwake"
+display_name = "Dreadwake, Champion of the Deep"
+max_health = 4200.0
+move_speed = 112.0
+contact_damage = 20.0
+attack_interval = 2.0
+telegraph_time = 0.65
+charge_speed = 820.0
+charge_damage = 26.0
+slam_radius = 220.0
+slam_damage = 30.0
+enrage_time = 85.0
+champion_modifier_slots = 2

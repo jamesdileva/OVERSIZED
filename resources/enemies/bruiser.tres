@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"bruiser"
+display_name = "Bruiser"
+max_health = 70
+move_speed = 115
+scale = 1.4
+contact_damage = 13
+behavior = "tank"
+xp_value = 2.5
+tint = Color(0.65, 0.25, 0.2, 1)
+min_wave = 10
+spawn_weight = 0.7
+bruiser.tres3

@@ -6,6 +6,7 @@ extends Node
 
 var sword_upgrades: Array = []
 var universal_abilities: Array = []
+var enemies: Array = []
 var waves: Array = []
 var progression_curve: ProgressionCurve = null
 
@@ -19,6 +20,7 @@ func _ready() -> void:
 func load_all() -> void:
 	sword_upgrades = _scan_dir("res://resources/sword_upgrades")
 	universal_abilities = _scan_dir("res://resources/universal_abilities")
+	enemies = _scan_dir("res://resources/enemies")
 	waves = _scan_dir("res://resources/waves")
 	waves.sort_custom(func(a, b): return a.number < b.number)
 	var curves := _scan_dir("res://resources/progression")

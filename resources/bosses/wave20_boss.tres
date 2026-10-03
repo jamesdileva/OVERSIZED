@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BossDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/boss_def.gd" id="1_boss"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"tide_tyrant"
+display_name = "The Tide Tyrant"
+max_health = 2600.0
+move_speed = 105.0
+contact_damage = 18.0
+attack_interval = 2.2
+telegraph_time = 0.7
+charge_speed = 780.0
+charge_damage = 24.0
+slam_radius = 200.0
+slam_damage = 28.0
+enrage_time = 80.0
+champion_modifier_slots = 0

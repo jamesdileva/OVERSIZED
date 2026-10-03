@@ -12,6 +12,8 @@ extends RefCounted
 
 signal enemy_killed(at: Vector2)
 signal hit_event(pos: Vector2, amount: float, tag_mask: int)
+signal exploded(pos: Vector2, radius: float, damage: float)
+signal shot(pos: Vector2, dir: Vector2, damage: float, speed: float)
 
 const DEFAULT_CAPACITY := 10000
 const ARENA_HALF_EXTENT := 1400.0
@@ -50,18 +52,28 @@ var bleed_left := PackedFloat32Array()
 
 var grid: SpatialHash
 
+## Enemy type for this sim (one sim per archetype — implementation-guide §6.4).
+## null = the baseline chaser dot (bench/spike compatibility).
+var def: EnemyDef = null
+
+# wave difficulty multipliers (WaveDef speed_scale/health_scale)
+var speed_scale := 1.0
+var health_scale := 1.0
+
 # two-category damage math: final = base * (1 + sum(increased[tag])) * prod(more)
 var increased := {}                # tag bit -> additive sum
 var more_list: Array[float] = []
 
-var max_speed := 150.0
 var steer_rate := 5.0            # rad/s-ish turn-in toward desired velocity
 var separation_radius := 24.0
 var separation_accel := 500.0    # px/s^2 applied per unit of separation push
 var max_neighbor_checks := 8     # per-enemy cap so worst-case clump cost is bounded
-var max_health := 30.0
 var knockback_impulse := 240.0
 var flash_decay := 7.0           # per second
+
+var _fire_cd := PackedFloat32Array()     # ranged: per-enemy shot timer
+var _windup := PackedFloat32Array()      # exploder: per-enemy windup timer
+var _explode_queue: Array[int] = []
 
 
 func _init(p_capacity: int = DEFAULT_CAPACITY) -> void:
@@ -75,6 +87,8 @@ func _init(p_capacity: int = DEFAULT_CAPACITY) -> void:
 	burn_left.resize(capacity)
 	chill_left.resize(capacity)
 	bleed_left.resize(capacity)
+	_fire_cd.resize(capacity)
+	_windup.resize(capacity)
 	grid = SpatialHash.new(separation_radius * 2.0)
 
 
@@ -86,13 +100,15 @@ func spawn(pos: Vector2) -> int:
 	active_count += 1
 	positions[i] = pos
 	velocities[i] = Vector2.ZERO
-	speeds[i] = max_speed * randf_range(0.7, 1.3)
-	healths[i] = max_health
+	speeds[i] = (def.move_speed if def != null else 150.0) * speed_scale * randf_range(0.7, 1.3)
+	healths[i] = (def.max_health if def != null else 30.0) * health_scale
 	hit_flash[i] = 0.0
 	status_mask[i] = 0
 	burn_left[i] = 0.0
 	chill_left[i] = 0.0
 	bleed_left[i] = 0.0
+	_fire_cd[i] = (def.fire_interval if def != null else 0.0) * 0.5
+	_windup[i] = 0.0
 	return i
 
 
@@ -198,11 +214,22 @@ func step(dt: float, target: Vector2) -> void:
 	if do_status_tick:
 		_status_tick_left = STATUS_TICK
 	_dot_kills.clear()
+	var beh := def.behavior if def != null else "chaser"
+	var is_ranged := beh == "ranged"
+	var is_exploder := beh == "exploder"
+	var range_sq := (def.attack_range if def != null else 0.0) * (def.attack_range if def != null else 0.0)
+	var trig_sq := (def.trigger_radius if def != null else 0.0) * (def.trigger_radius if def != null else 0.0)
 	for i in active_count:
 		var pos: Vector2 = positions[i]
 		var sm := status_mask[i]
 		var chill_mult := 1.0 - (CHILL_SLOW if (sm & CHILL_BIT) != 0 else 0.0)
-		var desired: Vector2 = (target - pos).normalized() * speeds[i] * chill_mult
+		var to_target := target - pos
+		var dist_sq_t := to_target.length_squared()
+		var desired: Vector2
+		if is_ranged and dist_sq_t < range_sq:
+			desired = Vector2.ZERO   # in range: hold position and shoot
+		else:
+			desired = to_target.normalized() * speeds[i] * chill_mult
 		var vel: Vector2 = velocities[i].lerp(desired, steer)
 		var push := Vector2.ZERO
 		var checks := 0
@@ -227,6 +254,20 @@ func step(dt: float, target: Vector2) -> void:
 		positions[i] = (pos + vel * dt).clamp(ARENA_MIN, ARENA_MAX)
 		velocities[i] = vel
 		hit_flash[i] = maxf(0.0, hit_flash[i] - flash_delta)
+		# type behaviors (ranged fires, exploders arm) — per-sim, not per-type-in-loop
+		if is_ranged:
+			_fire_cd[i] -= dt
+			if _fire_cd[i] <= 0.0 and dist_sq_t < range_sq * 1.2:
+				_fire_cd[i] = def.fire_interval
+				shot.emit(positions[i], to_target.normalized(), def.projectile_damage, def.projectile_speed)
+		elif is_exploder:
+			if _windup[i] > 0.0:
+				_windup[i] -= dt
+				hit_flash[i] = 1.0   # white-hot telegraph
+				if _windup[i] <= 0.0:
+					_explode_queue.append(i)
+			elif dist_sq_t < trig_sq:
+				_windup[i] = def.windup_time
 		# status decay + damage-over-time. DoT applies health directly —
 		# calling damage() here would swap-remove slots mid-iteration — and
 		# kills are processed after the loop, highest index first.
@@ -260,4 +301,10 @@ func step(dt: float, target: Vector2) -> void:
 			var i: int = _dot_kills[k]
 			if i < active_count:
 				enemy_killed.emit(positions[i])
+				despawn(i)
+	if not _explode_queue.is_empty():
+		for k in range(_explode_queue.size() - 1, -1, -1):
+			var i: int = _explode_queue[k]
+			if i < active_count:
+				exploded.emit(positions[i], def.blast_radius, def.blast_damage)
 				despawn(i)

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"swarmer"
+display_name = "Swarmer"
+max_health = 16
+move_speed = 185
+scale = 0.8
+contact_damage = 6
+behavior = "swarmer"
+xp_value = 0.6
+tint = Color(0.95, 0.55, 0.3, 1)
+min_wave = 2
+spawn_weight = 1.2
+swarmer.tres3

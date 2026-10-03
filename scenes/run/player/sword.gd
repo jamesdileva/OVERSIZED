@@ -3,13 +3,10 @@ extends Node2D
 
 ## The oversized sword, pivoted on the hero. Always mid-swing via the
 ## SwordSwing state machine (no cooldown gate — implementation-guide.md §5.1).
-## Hit detection runs against the horde sim's spatial hash: circle candidates
-## around the hero, then exact reach + sweep-window tests (§5.2's hash-based
-## approach). One hit per enemy per swing, tracked by pool slot. The blade is
-## placeholder custom drawing until real art lands.
-##
-## Upgrades mutate the exposed knobs (reach, damage, swing timings via
-## UpgradeEffects); the combo counter feeds Combo Burst / spin upgrades.
+## Hit detection runs against the horde group's per-type spatial hashes:
+## circle candidates around the hero, then exact reach + sweep-window tests
+## (§5.2's hash-based approach). One hit per enemy per swing, tracked by
+## per-sim flags. The blade is placeholder custom drawing until real art.
 
 signal combo_burst(center: Vector2)
 
@@ -22,26 +19,25 @@ var swing := SwordSwing.new()
 var combo := ComboCounter.new()
 var hit_tag_mask := 0               # elemental infusions add their tags here
 
-var _sim: HordeSim
+var _group: HordeGroup
 var _on_hit: Callable
 var boss_getter: Callable          # run provides () -> Boss (or null)
 var _boss_hit_this_swing := false
-var _hit_flags: PackedByteArray = PackedByteArray()
 var _hits_this_swing := 0
 
 
-func setup(sim: HordeSim, on_hit: Callable) -> void:
-	_sim = sim
+func setup(group: HordeGroup, on_hit: Callable) -> void:
+	_group = group
 	_on_hit = on_hit
-	_hit_flags.resize(sim.capacity)
+	group.setup_flags()
 	swing.start(0.0)
 
 
 func _physics_process(dt: float) -> void:
-	if _sim == null:
+	if _group == null:
 		return
 	if swing.swing_just_started:
-		_hit_flags.fill(0)
+		_group.begin_swing()
 		_hits_this_swing = 0
 		_boss_hit_this_swing = false
 		swing.base_angle = _aim_angle()
@@ -58,14 +54,16 @@ func _aim_angle() -> float:
 	var p := global_position
 	var best_dist := -1.0
 	var best_angle := 0.0
-	for i in _sim.grid.circle_candidates(p, AIM_RANGE):
-		if i >= _sim.active_count:
-			continue
-		var to: Vector2 = _sim.positions[i] - p
-		var d := to.length()
-		if best_dist < 0.0 or d < best_dist:
-			best_dist = d
-			best_angle = to.angle()
+	for h in _group.hordes:
+		var s: HordeSim = h["sim"]
+		for i in s.grid.circle_candidates(p, AIM_RANGE):
+			if i >= s.active_count:
+				continue
+			var to: Vector2 = s.positions[i] - p
+			var d := to.length()
+			if best_dist < 0.0 or d < best_dist:
+				best_dist = d
+				best_angle = to.angle()
 	return best_angle
 
 
@@ -73,29 +71,31 @@ func _sweep_hits() -> void:
 	var p := global_position
 	var reach_sq := (reach + 14.0) * (reach + 14.0)
 	var mask := BASE_MASK | hit_tag_mask
-	for i in _sim.grid.circle_candidates(p, reach):
-		if _hit_flags[i] == 1 or i >= _sim.active_count:
-			continue
-		var to: Vector2 = _sim.positions[i] - p
-		if to.length_squared() > reach_sq:
-			continue
-		if not swing.in_hit_window(to.angle()):
-			continue
-		_hit_flags[i] = 1
-		# capture the victim's slot position before damage — a kill swap-removes
-		# the slot and the index would point at a different enemy afterwards
-		var hit_pos: Vector2 = _sim.positions[i]
-		var died := _sim.damage(i, damage, to.normalized(), mask)
-		_hits_this_swing += 1
-		if combo.register_hits(1):
-			combo_burst.emit(p)
-		_on_hit.call(hit_pos, damage, died)
+	for h_idx in _group.hordes.size():
+		var s: HordeSim = _group.hordes[h_idx]["sim"]
+		for i in s.grid.circle_candidates(p, reach):
+			if _group.flag_get(h_idx, i) == 1 or i >= s.active_count:
+				continue
+			var to: Vector2 = s.positions[i] - p
+			if to.length_squared() > reach_sq:
+				continue
+			if not swing.in_hit_window(to.angle()):
+				continue
+			_group.flag_set(h_idx, i)
+			# capture the victim's slot position before damage — a kill swap-removes
+			# the slot and the index would point at a different enemy afterwards
+			var hit_pos: Vector2 = s.positions[i]
+			var died := s.damage(i, damage, to.normalized(), mask)
+			_hits_this_swing += 1
+			if combo.register_hits(1):
+				combo_burst.emit(p)
+			_on_hit.call(hit_pos, damage, died)
 	_sweep_boss(p)
 
 
-## The boss is a single entity outside the pooled sim, so the sweep tests it
+## The boss is a single entity outside the pooled sims, so the sweep tests it
 ## separately with the same reach + window rules, once per swing — applying
-## the sim's damage math itself (modified by tag mask) for parity.
+## the group's damage math itself (modified by tag mask) for parity.
 func _sweep_boss(p: Vector2) -> void:
 	if _boss_hit_this_swing or not boss_getter.is_valid():
 		return
@@ -110,7 +110,7 @@ func _sweep_boss(p: Vector2) -> void:
 	_boss_hit_this_swing = true
 	var mask := BASE_MASK | hit_tag_mask
 	var hit_pos: Vector2 = b.global_position - to.normalized() * b.body_radius
-	b.take_damage(_sim.modified(damage, mask))
+	b.take_damage(_group.modified(damage, mask))
 	_on_hit.call(hit_pos, damage, false)
 
 

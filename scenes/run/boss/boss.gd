@@ -25,11 +25,17 @@ var _charge_left := 0.0
 var _slam_pos := Vector2.ZERO
 var _attack_cd := 1.4                # first attack shortly after spawn
 var _hit_player_this_charge := false
+var _champ_speed := 1.0              # champion_modifier_slots bonus
 
 
 func setup(p_def: BossDef, player: Player) -> void:
 	def = p_def
-	brain = BossBrain.new(p_def.max_health, p_def.enrage_time)
+	# champion modifiers (architecture.md §9): each slot = +20% HP, +8%
+	# speed, 10% faster enrage. Wired in Sprint 2.3; the wave-30 boss wears
+	# 2 slots as the live proof.
+	var slots := p_def.champion_modifier_slots
+	brain = BossBrain.new(p_def.max_health * (1.0 + 0.2 * slots), p_def.enrage_time / (1.0 + 0.1 * slots))
+	_champ_speed = 1.0 + 0.08 * slots
 	_player = player
 
 
@@ -46,7 +52,7 @@ func _physics_process(dt: float) -> void:
 	if brain == null or _player == null:
 		return
 	brain.tick(dt)
-	var mult := brain.speed_mult()
+	var mult := brain.speed_mult() * _champ_speed
 	match _state:
 		State.SEEK:
 			var to := _player.global_position - global_position

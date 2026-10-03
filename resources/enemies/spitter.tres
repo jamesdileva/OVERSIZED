@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"spitter"
+display_name = "Spitter"
+max_health = 24
+move_speed = 130
+scale = 1.0
+contact_damage = 6
+behavior = "ranged"
+xp_value = 2
+tint = Color(0.85, 0.35, 0.6, 1)
+min_wave = 5
+spawn_weight = 0.7
+spitter.tres3

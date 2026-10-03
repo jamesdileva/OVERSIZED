@@ -10,7 +10,7 @@ extends RefCounted
 
 static func apply(def: SwordUpgradeDef, ctx: Dictionary) -> void:
 	var sword: Sword = ctx["sword"]
-	var sim: HordeSim = ctx["sim"]
+	var group: HordeGroup = ctx["group"]
 	var run = ctx["run"]
 	match def.effect_id:
 		&"reach_up":
@@ -29,7 +29,7 @@ static func apply(def: SwordUpgradeDef, ctx: Dictionary) -> void:
 		&"heavy_blade":
 			sword.damage += def.magnitude
 		&"momentum":
-			sim.knockback_impulse *= 1.0 + def.magnitude
+			group.scale_knockback(1.0 + def.magnitude)
 		&"leech":
 			run.leech_on_kill += def.magnitude
 		&"spin_finisher":

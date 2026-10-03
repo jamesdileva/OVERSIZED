@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="WaveDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/wave_def.gd" id="1_wave"]
+
+[resource]
+script = ExtResource("1_wave")
+number = 16
+duration = 47.0
+spawns_per_second = 5.05
+max_alive = 111
+speed_scale = 1.420
+health_scale = 2.95

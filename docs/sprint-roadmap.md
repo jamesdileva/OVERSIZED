@@ -60,6 +60,8 @@ Two principles govern it:
 
 **Phase 2 done when**: every core system is functional on placeholder content — tags and reactions fire in real runs, the AP loadout crunch is real, save/load works, and the loop closes without touching the debug console.
 
+**Playtest checkpoints** (`PLAYTEST.md` holds the running list): a short focused session after Sprint 2.3 (difficulty + boss pacing with the accumulated 2.1/2.2 batch), and the full batch after Sprint 2.4 — synergy is the most interaction-heavy system in Phase 2 and needs real play before 2.5 tunes the economy against it.
+
 ### Sprint 2.1 — Tag & effect foundation
 - **Build**: `Tags` enum + bitmask helpers; hit-event pipeline carrying `tag_mask`; two-category damage math (`increased` / `more`, `architecture.md` §5.4); status arrays in the horde layer (`status_mask` + timers) with **three** statuses first (Burn, Chill, Bleed); `tags` added to all existing Sword Upgrade and Ability definitions.
 - **Art/audio lane**: finalize the tag→color map; start the asset tracker; set Godot import presets; sourcing decisions made for tilesets, UI, and music.

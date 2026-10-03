@@ -38,6 +38,11 @@ func _initialize() -> void:
 	_test_tags_coverage()
 	_test_progression_curve()
 	_test_loadout_rules()
+	_test_enemy_defs_load()
+	_test_composition_gating()
+	_test_ranged_behavior()
+	_test_exploder_behavior()
+	_test_champion_boss()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -72,6 +77,8 @@ func _test_scripts_compile() -> void:
 		"res://scripts/combat/boss_brain.gd",
 		"res://scripts/combat/tags.gd",
 		"res://scripts/resource_defs/progression_curve.gd",
+		"res://scripts/resource_defs/enemy_def.gd",
+		"res://scripts/horde/horde_group.gd",
 		"res://scenes/run/wave_director/wave_director.gd",
 		"res://scenes/run/player/player.gd",
 		"res://scenes/run/player/sword.gd",
@@ -82,6 +89,7 @@ func _test_scripts_compile() -> void:
 		"res://scenes/run/stress_test.gd",
 		"res://scenes/run/xp_gems.gd",
 		"res://scenes/run/boss/boss.gd",
+		"res://scenes/run/hostile_projectiles.gd",
 		"res://scenes/run/abilities/orbit_blades.gd",
 		"res://scenes/run/abilities/spirit_blade.gd",
 		"res://scenes/run/abilities/lightning_flash.gd",
@@ -318,7 +326,7 @@ func _test_sim_damage_and_death() -> void:
 	check(sim.healths[idx] == hp0 - 10.0, "health reduced by damage amount")
 	check(sim.hit_flash[idx] == 1.0, "hit flash set on damage")
 	check(sim.velocities[idx].x > 0.0, "knockback applied along hit direction")
-	alive = sim.damage(idx, sim.max_health, Vector2.LEFT)
+	alive = sim.damage(idx, 60.0, Vector2.LEFT)
 	check(alive, "lethal damage reports a kill")
 	check(deaths[0] == 1, "enemy_killed emitted once (lambdas capture arrays by reference)")
 	check(sim.active_count == 0, "dead enemy despawned")
@@ -463,11 +471,12 @@ func _test_spin_swing() -> void:
 
 
 func _test_upgrade_effects_apply() -> void:
-	print("upgrade effects: apply mutates sword/sim state")
+	print("upgrade effects: apply mutates sword/group state")
 	var sword := Sword.new()
-	var sim := HordeSim.new(16)
+	var group := HordeGroup.new()
+	group.add_default()
 	var run := {"leech_on_kill": 0.0}
-	var ctx := {"sword": sword, "sim": sim, "player": null, "run": run}
+	var ctx := {"sword": sword, "group": group, "player": null, "run": run}
 	var reach := _make_upgrade(&"reach_up")
 	reach.magnitude = 25.0
 	UpgradeEffects.apply(reach, ctx)
@@ -492,7 +501,7 @@ func _test_upgrade_effects_apply() -> void:
 	var mom := _make_upgrade(&"momentum")
 	mom.magnitude = 0.5
 	UpgradeEffects.apply(mom, ctx)
-	check(sim.knockback_impulse > 240.0, "momentum scales knockback")
+	check(group.hordes[0]["sim"].knockback_impulse > 240.0, "momentum scales knockback")
 	var leech := _make_upgrade(&"leech")
 	leech.magnitude = 2.0
 	UpgradeEffects.apply(leech, ctx)
@@ -548,13 +557,15 @@ func _make_ability(id: StringName, kind := "active", max_rank := 5, effect := &"
 
 func _test_ability_caster() -> void:
 	print("ability caster: passives recompute, actives fire on cooldown")
-	var sim := HordeSim.new(64)
+	var group := HordeGroup.new()
+	group.add_default()
+	var sim: HordeSim = group.hordes[0]["sim"]
 	var player := Player.new()
 	var run := {"xp_magnet_radius": 90.0, "xp_mult": 1.0}
 	var boss_hits := []
 	var caster := AbilityCaster.new()
 	check(caster is Node2D, "caster is Node2D — child hazards inherit the player transform")
-	caster.setup(sim, player, run, func(pos: Vector2, radius: float, amount: float, tag_mask: int) -> void:
+	caster.setup(group, player, run, func(pos: Vector2, radius: float, amount: float, tag_mask: int) -> void:
 		boss_hits.append(amount))
 	var vitality := _make_ability(&"vitality", "passive", 3, &"vitality")
 	caster.bring_online(vitality)
@@ -710,7 +721,7 @@ func _test_tags_coverage() -> void:
 			"each implemented status element has a producer (Fire %d, Frost %d, Blood %d)" % [fire, frost, blood])
 	# infusion application: picking Fire Infusion puts FIRE on the sword's hits
 	var sword := Sword.new()
-	var ctx := {"sword": sword, "sim": HordeSim.new(8), "player": null, "run": {"leech_on_kill": 0.0}}
+	var ctx := {"sword": sword, "group": HordeGroup.new(), "player": null, "run": {"leech_on_kill": 0.0}}
 	var infuse: SwordUpgradeDef = loader.sword_upgrades[0]
 	for d in loader.sword_upgrades:
 		if d.id == &"fire_infusion":
@@ -784,3 +795,100 @@ func _test_loadout_rules() -> void:
 	var d: bool = ab.can_play(&"test_sound")  # voice cap = 2
 	check(a and not b and c and not d, "voice limits + retrigger interval + finished() all enforced")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(mp.save_path))
+
+
+func _test_enemy_defs_load() -> void:
+	print("enemy defs: 8 types load with all five behaviors")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	check(loader.enemies.size() >= 8, "at least 8 enemy type .tres files load (got %d)" % loader.enemies.size())
+	var behaviors := {}
+	var valid := true
+	for d in loader.enemies:
+		behaviors[d.behavior] = true
+		if not ["chaser", "swarmer", "tank", "ranged", "exploder"].has(d.behavior):
+			valid = false
+	check(valid, "every enemy behavior is a known type")
+	check(behaviors.has("ranged") and behaviors.has("tank") and behaviors.has("exploder") and behaviors.has("swarmer"),
+			"chaser/swarmer/tank/ranged/exploder all present")
+
+
+func _test_composition_gating() -> void:
+	print("spawn composition: min_wave gates types into the weighted pool")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	var group := HordeGroup.new()
+	for d in loader.enemies:
+		group.add_type(d)
+	for k in 60:
+		group.spawn_weighted(Vector2(k * 10.0, 0), 1)
+	var early_types := 0
+	for h in group.hordes:
+		var s: HordeSim = h["sim"]
+		if s.active_count > 0:
+			early_types += 1
+			check(s.def.min_wave <= 1, "only wave-1 types spawn at wave 1")
+	check(early_types == 1, "only the baseline type spawns at wave 1")
+	for k in 240:
+		group.spawn_weighted(Vector2(k * 7.0, k * 3.0), 12)
+	var late_types := 0
+	var total := 0
+	for h in group.hordes:
+		total += h["sim"].active_count
+		if h["sim"].active_count > 0:
+			late_types += 1
+	check(total == 300, "all 300 spawns landed (60 + 240)")
+	check(late_types >= 5, "deep waves draw from most of the roster (%d types seen)" % late_types)
+
+
+func _test_ranged_behavior() -> void:
+	print("ranged behavior: holds distance and fires on interval")
+	var d := EnemyDef.new()
+	d.behavior = "ranged"
+	d.attack_range = 380.0
+	d.fire_interval = 1.0
+	d.projectile_damage = 8.0
+	var sim := HordeSim.new(16)
+	sim.def = d
+	var i := sim.spawn(Vector2(300, 0))
+	var shots := [0]
+	sim.shot.connect(func(_p, _dir, _dmg, _spd): shots[0] += 1)
+	for f in 130:
+		sim.step(1.0 / 60.0, Vector2.ZERO)
+	check(shots[0] >= 2, "ranged enemy fired on its interval (float drift tolerated)")
+	check(sim.positions[i].length() >= 299.0, "ranged enemy held its distance instead of closing")
+
+
+func _test_exploder_behavior() -> void:
+	print("exploder behavior: windup, detonate, self-consume, no kill credit")
+	var d := EnemyDef.new()
+	d.behavior = "exploder"
+	d.trigger_radius = 90.0
+	d.windup_time = 0.5
+	d.blast_radius = 130.0
+	d.blast_damage = 16.0
+	var sim := HordeSim.new(16)
+	sim.def = d
+	sim.spawn(Vector2(60, 0))
+	var booms := [0]
+	sim.exploded.connect(func(_p, _r, _dm): booms[0] += 1)
+	var deaths := [0]
+	sim.enemy_killed.connect(func(_at): deaths[0] += 1)
+	for f in 90:
+		sim.step(1.0 / 60.0, Vector2.ZERO)
+	check(booms[0] == 1, "exploder detonated once inside trigger range")
+	check(sim.active_count == 0, "exploder consumed itself")
+	check(deaths[0] == 0, "self-destruct grants no kill credit (no XP)")
+
+
+func _test_champion_boss() -> void:
+	print("boss champion slots: +20% HP per slot, wired through setup")
+	var bd := BossDef.new()
+	bd.max_health = 1000.0
+	bd.champion_modifier_slots = 2
+	var player := Player.new()
+	var boss_node := Boss.new()
+	boss_node.setup(bd, player)
+	check(absf(boss_node.brain.max_health - 1400.0) < 0.01, "2 champion slots = 1400 HP on a 1000 HP def")
+	boss_node.free()
+	player.free()

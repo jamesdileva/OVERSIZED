@@ -31,9 +31,11 @@ func _ready() -> void:
 	var hl_idx := uargs.find("--hero_level")
 	if hl_idx != -1 and hl_idx + 1 < uargs.size():
 		MetaProgression.set_hero_level(int(uargs[hl_idx + 1]))
-	# automation never sits in the menu
+	# automation never sits in the menu — deferred because the initial scene
+	# is still being added while autoloads ready, and change_scene would trip
+	# the busy-parent guard
 	if uargs.has("--bot") or uargs.has("--shot"):
-		goto(State.RUN)
+		goto.call_deferred(State.RUN)
 		return
 	var ui_idx := uargs.find("--ui_shot")
 	if ui_idx != -1 and ui_idx + 1 < uargs.size():

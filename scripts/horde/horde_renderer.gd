@@ -20,16 +20,23 @@ func setup(sim: HordeSim, dot_diameter := 14.0, tint := Color(0.9, 0.3, 0.22)) -
 	var quad := QuadMesh.new()
 	quad.size = Vector2(dot_diameter, dot_diameter)
 	_multimesh = MultiMesh.new()
-	# transform_format (and use_colors) must be set before instance_count
-	# allocates the buffer.
+	# transform_format (and use_colors/use_custom_data) must be set before
+	# instance_count allocates the buffer.
 	_multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	_multimesh.use_colors = true
+	_multimesh.use_custom_data = true
 	_multimesh.mesh = quad
 	_multimesh.instance_count = sim.capacity
+	# per-slot animation phase, set once — the shader animates from TIME
+	for i in sim.capacity:
+		_multimesh.set_instance_custom_data(i, Color(fmod(i * 0.618034, 1.0), 1.0, 0.0, 0.0))
 	_multimesh.visible_instance_count = 0
 	var mmi := MultiMeshInstance2D.new()
 	mmi.multimesh = _multimesh
 	mmi.texture = _make_dot_texture(int(dot_diameter))
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://assets/shaders/enemy_wobble.gdshader")
+	mmi.material = mat
 	add_child(mmi)
 
 

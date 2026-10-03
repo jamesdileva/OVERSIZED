@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"sprinter"
+display_name = "Sprinter"
+max_health = 12
+move_speed = 240
+scale = 0.7
+contact_damage = 7
+behavior = "swarmer"
+xp_value = 0.8
+tint = Color(0.95, 0.7, 0.4, 1)
+min_wave = 8
+spawn_weight = 0.8
+sprinter.tres3

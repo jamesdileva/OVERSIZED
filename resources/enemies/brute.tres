@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"brute"
+display_name = "Brute"
+max_health = 120
+move_speed = 90
+scale = 1.9
+contact_damage = 18
+behavior = "tank"
+xp_value = 4
+tint = Color(0.55, 0.2, 0.18, 1)
+min_wave = 4
+spawn_weight = 0.6
+brute.tres3

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WaveDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/wave_def.gd" id="1_wave"]
+[ext_resource type="Resource" path="res://resources/bosses/wave20_boss.tres" id="2_boss"]
+
+[resource]
+script = ExtResource("1_wave")
+number = 20
+duration = 999
+spawns_per_second = 1.2
+max_alive = 24
+speed_scale = 1.45
+health_scale = 2.8
+boss = ExtResource("2_boss")
