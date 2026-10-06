@@ -46,13 +46,17 @@ Living list for batch playtests — one section per sprint's additions, newest l
 
 ## Batch 2 — after Sprint 2.4 (synergy completeness)
 
-### Sprint 2.4 — synergy layer (to fill in when it lands)
-- [ ] Reactions fire (Steam Burst / Shatter / Blood Boil)
-- [ ] Resonance tier-1 bonus appears with 3+ shared tags
-- [ ] Reroll/banish buttons work on choice screens
-- [ ] Synergy bias: the game offers cards matching your tags more often
-- [ ] One evolution path works end to end
-- [ ] Archetypes feel different (Pyre vs Frostbite vs Juggernaut builds)
+### Sprint 2.4 — synergy layer
+- [ ] **Steam Burst**: with Fire + Frost Infusions equipped, hitting a burning enemy with frost makes it detonate (fire-colored ring)
+- [ ] **Shatter**: hit a chilled (cyan) enemy with a heavy sword hit — double damage number
+- [ ] **Blood Boil**: kill an enemy that's both Burning and Bleeding — it explodes in fire
+- [ ] **Resonance (Pyre)**: equip 3+ Fire-tagged abilities — your kills spread Burn to nearby enemies
+- [ ] **Reroll**: choice screens have a "Reroll (2 left)" button — new cards appear, uses drain
+- [ ] **Banish**: "Banish" under a card removes it from the rest of the run (1 per run)
+- [ ] **Rarity tiers**: cards show [common] / [uncommon] / [rare]
+- [ ] **Synergy bias**: with fire gear equipped, fire cards appear offered more often (soft — over several waves)
+- [ ] **Evolution**: Orbiting Blades at rank 5 + Fire Infusion owned → "evolved into Solar Halo!" banner, bigger burning ring
+- [ ] Performance still holds with reactions chaining in big waves
 
 ### Regression sweep (each batch)
 - [ ] Full loop: menu → run → death → summary → hub → menu

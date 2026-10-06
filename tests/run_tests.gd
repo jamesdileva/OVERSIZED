@@ -43,6 +43,10 @@ func _initialize() -> void:
 	_test_ranged_behavior()
 	_test_exploder_behavior()
 	_test_champion_boss()
+	_test_reactions()
+	_test_resonance()
+	_test_offer_bias_banish()
+	_test_evolution()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -78,6 +82,7 @@ func _test_scripts_compile() -> void:
 		"res://scripts/combat/tags.gd",
 		"res://scripts/resource_defs/progression_curve.gd",
 		"res://scripts/resource_defs/enemy_def.gd",
+		"res://scripts/resource_defs/evolution_def.gd",
 		"res://scripts/horde/horde_group.gd",
 		"res://scenes/run/wave_director/wave_director.gd",
 		"res://scenes/run/player/player.gd",
@@ -318,7 +323,7 @@ func _test_sim_damage_and_death() -> void:
 	print("horde sim: damage, flash, knockback, death")
 	var sim := HordeSim.new(16)
 	var deaths := [0]
-	sim.enemy_killed.connect(func(_at: Vector2) -> void: deaths[0] += 1)
+	sim.enemy_killed.connect(func(_at: Vector2, _st: int) -> void: deaths[0] += 1)
 	var idx := sim.spawn(Vector2.ZERO)
 	var hp0: float = sim.healths[idx]
 	var alive := sim.damage(idx, 10.0, Vector2.RIGHT)
@@ -648,7 +653,7 @@ func _test_statuses() -> void:
 	print("statuses: applied from hit tags, DoT kills, chill slows, decay clears")
 	var sim := HordeSim.new(64)
 	var deaths := [0]
-	sim.enemy_killed.connect(func(_at: Vector2) -> void: deaths[0] += 1)
+	sim.enemy_killed.connect(func(_at: Vector2, _st: int) -> void: deaths[0] += 1)
 	var idx := sim.spawn(Vector2.ZERO)
 	sim.damage(idx, 25.0, Vector2.ZERO, Tags.FIRE_BIT)  # 5 HP left; Burn deals 18 over 3s
 	check(sim.status_mask[idx] & Tags.BURN_BIT != 0, "FIRE-tagged hit applies Burn")
@@ -873,7 +878,7 @@ func _test_exploder_behavior() -> void:
 	var booms := [0]
 	sim.exploded.connect(func(_p, _r, _dm): booms[0] += 1)
 	var deaths := [0]
-	sim.enemy_killed.connect(func(_at): deaths[0] += 1)
+	sim.enemy_killed.connect(func(_at: Vector2, _st: int) -> void: deaths[0] += 1)
 	for f in 90:
 		sim.step(1.0 / 60.0, Vector2.ZERO)
 	check(booms[0] == 1, "exploder detonated once inside trigger range")
@@ -891,4 +896,145 @@ func _test_champion_boss() -> void:
 	boss_node.setup(bd, player)
 	check(absf(boss_node.brain.max_health - 1400.0) < 0.01, "2 champion slots = 1400 HP on a 1000 HP def")
 	boss_node.free()
+	player.free()
+
+
+func _test_reactions() -> void:
+	print("reactions: steam burst, shatter, blood boil + proc depth guardrail")
+	var sim := HordeSim.new(16)
+	var reactions := []
+	sim.reaction_fired.connect(func(kind, _pos, _r, _a): reactions.append(kind))
+	var i := sim.spawn(Vector2.ZERO)
+	sim.damage(i, 0.0, Vector2.ZERO, Tags.FIRE_BIT)              # applies Burn
+	sim.damage(i, 0.0, Vector2.ZERO, Tags.FROST_BIT)             # Frost on Burning -> Steam Burst
+	var steam_count := 0
+	for kind in reactions:
+		if kind == &"steam_burst":
+			steam_count += 1
+	check(steam_count >= 1, "Steam Burst fired on Frost-hit of a Burning enemy")
+	sim.damage(i, 0.0, Vector2.ZERO, Tags.FROST_BIT, 2)          # at proc depth 2: no chain
+	var after := 0
+	for kind in reactions:
+		if kind == &"steam_burst":
+			after += 1
+	check(after == steam_count, "no Steam Burst at proc depth 2 (guardrail holds)")
+	# Shatter: chilled enemy + heavy Slash = double damage
+	var sim2 := HordeSim.new(16)
+	var j := sim2.spawn(Vector2.ZERO)
+	sim2.damage(j, 0.0, Vector2.ZERO, Tags.FROST_BIT)
+	var shatters := []
+	sim2.reaction_fired.connect(func(kind, _p, _r, _a): shatters.append(kind))
+	var hp0: float = sim2.healths[j]
+	sim2.damage(j, 12.0, Vector2.ZERO, Tags.SLASH_BIT)
+	check(sim2.healths[j] == hp0 - 24.0, "Shatter doubles a 12-damage Slash hit on a chilled enemy")
+	check(shatters.has(&"shatter"), "Shatter reaction fired")
+	sim2.damage(j, 8.0, Vector2.ZERO, Tags.SLASH_BIT)  # below the heavy threshold
+	check(sim2.healths[j] == hp0 - 32.0, "light Slash hits do not shatter")
+	# Blood Boil: dying while Bleeding + Burning detonates
+	var sim3 := HordeSim.new(16)
+	var k := sim3.spawn(Vector2.ZERO)
+	sim3.damage(k, 0.0, Vector2.ZERO, Tags.FIRE_BIT | Tags.BLOOD_BIT)
+	var boils := []
+	sim3.reaction_fired.connect(func(kind, _p, _r, _a): boils.append(kind))
+	sim3.damage(k, 60.0, Vector2.ZERO, Tags.SLASH_BIT)
+	check(sim3.active_count == 0 and boils.has(&"blood_boil"), "Blood Boil detonated on a Burning+Bleeding death")
+
+
+func _test_resonance() -> void:
+	print("resonance: 3+ equipped sharing Fire grants +15% and lights Pyre")
+	var group := HordeGroup.new()
+	group.add_default()
+	var player := Player.new()
+	var caster := AbilityCaster.new()
+	caster.setup(group, player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0},
+			func(_p, _r, _a, _m): pass)
+	var pyre := UniversalAbilityDef.new()
+	pyre.id = &"pyre"
+	pyre.tags = Tags.FIRE_BIT
+	pyre.kind = "passive"
+	pyre.effect_id = &"tag_amplifier"
+	pyre.magnitude = 0.25
+	pyre.ap_cost = 2
+	pyre.max_rank = 3
+	var fire_thing := UniversalAbilityDef.new()
+	fire_thing.id = &"fire_thing"
+	fire_thing.tags = Tags.FIRE_BIT
+	fire_thing.kind = "passive"
+	fire_thing.effect_id = &"plating"
+	var fire_thing2 := UniversalAbilityDef.new()
+	fire_thing2.id = &"fire_thing2"
+	fire_thing2.tags = Tags.FIRE_BIT
+	fire_thing2.kind = "passive"
+	fire_thing2.effect_id = &"plating"
+	caster.bring_online(pyre)
+	caster.bring_online(fire_thing)
+	check(not caster.has_resonance(Tags.FIRE_BIT), "2 fire-tagged abilities: no resonance yet")
+	caster.bring_online(fire_thing2)
+	check(caster.has_resonance(Tags.FIRE_BIT), "3 fire-tagged abilities: Fire resonance active")
+	check(absf(group.modified(100.0, Tags.FIRE_BIT) - 140.0) < 0.01,
+			"Fire damage: 25% amplifier + 15% resonance = +40%")
+	player.free()
+
+
+func _test_offer_bias_banish() -> void:
+	print("offers: synergy bias doubles matched weight; banished defs excluded")
+	var pool := [
+		_make_upgrade(&"fire_a"), _make_upgrade(&"cold_b"), _make_upgrade(&"fire_c"),
+	]
+	for d in pool:
+		d.rarity_weight = 1.0
+		d.tags = Tags.FIRE_BIT if d.id == &"fire_a" else Tags.FROST_BIT
+	check(absf(UpgradeEffects.offer_weight(pool[0], Tags.FIRE_BIT) - 1.25) < 0.01,
+			"one matching tag weighs x1.25")
+	check(absf(UpgradeEffects.offer_weight(pool[1], Tags.FIRE_BIT) - 1.0) < 0.01,
+			"unmatched def keeps base weight")
+	# statistical check with the x2 cap engaged: fire_a matches 4 of the bias
+	# tags, so its weight doubles — p(fire_a) = 0.5 vs 0.25/0.25 per draw
+	pool[0].tags = Tags.FIRE_BIT | Tags.SLASH_BIT | (1 << Tags.Tag.ON_HIT) | (1 << Tags.Tag.ON_KILL)
+	var bias: int = pool[0].tags
+	var counts := {"fire_a": 0, "cold_b": 0, "fire_c": 0}
+	for trial in 400:
+		var offers := UpgradeEffects.roll_upgrade_offers(pool, {}, 1, {}, bias)
+		counts[str(offers[0].id)] += 1
+	check(counts["fire_a"] > counts["cold_b"] and counts["fire_a"] > counts["fire_c"],
+			"biased offers favor the matching tag (%d vs %d+%d)" % [counts["fire_a"], counts["cold_b"], counts["fire_c"]])
+	var banished := {&"fire_a": true}
+	var offers2 := UpgradeEffects.roll_upgrade_offers(pool, {}, 3, banished)
+	var no_a := true
+	for o in offers2:
+		if o.id == &"fire_a":
+			no_a = false
+	check(offers2.size() == 2 and no_a, "banished def excluded from offers")
+
+
+func _test_evolution() -> void:
+	print("evolution: Orbiting Blades at max rank + Fire Infusion -> Solar Halo")
+	var player := Player.new()
+	var caster := AbilityCaster.new()
+	caster.setup(HordeGroup.new(), player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0},
+			func(_p, _r, _a, _m): pass)
+	var orbit := UniversalAbilityDef.new()
+	orbit.id = &"orbit_blades"
+	orbit.effect_id = &"orbit_blades"
+	orbit.kind = "active"
+	orbit.max_rank = 5
+	orbit.cooldown = 0.0
+	caster.bring_online(orbit)
+	for r in 4:
+		caster.rank_up(&"orbit_blades")
+	var evolved_ids := []
+	caster.evolved.connect(func(o, n): evolved_ids.append([o, n]))
+	var halo := UniversalAbilityDef.new()
+	halo.id = &"solar_halo"
+	halo.effect_id = &"orbit_blades"
+	halo.kind = "active"
+	halo.max_rank = 5
+	halo.tags = Tags.FIRE_BIT
+	halo.magnitude = 1.6
+	check(caster.evolve(&"orbit_blades", halo), "evolve succeeds at max rank")
+	check(caster.rank_of(&"orbit_blades") == 0 and caster.rank_of(&"solar_halo") == 5,
+			"entry swapped, rank carried over")
+	check(evolved_ids.size() == 1, "evolved signal fired once")
+	check(caster._orbit != null and absf(caster._orbit._radius - 198.4) < 0.1,
+			"orbit hazard reconfigured with Solar Halo potency (radius 198.4)")
 	player.free()

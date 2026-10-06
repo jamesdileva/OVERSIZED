@@ -7,7 +7,7 @@ extends RefCounted
 ## flags, and circle damage across every type. Spawn composition data lives
 ## on the EnemyDefs themselves (min_wave + spawn_weight).
 
-signal enemy_killed(at: Vector2, xp_value: float)
+signal enemy_killed(at: Vector2, xp_value: float, status: int)
 
 const PER_TYPE_CAPACITY := 2000
 
@@ -27,7 +27,7 @@ func _add(def: EnemyDef) -> void:
 	var s := HordeSim.new(PER_TYPE_CAPACITY)
 	s.def = def
 	var xp := def.xp_value if def != null else 1.0
-	s.enemy_killed.connect(func(at: Vector2) -> void: enemy_killed.emit(at, xp))
+	s.enemy_killed.connect(func(at: Vector2, status: int) -> void: enemy_killed.emit(at, xp, status))
 	hordes.append({"sim": s, "def": def})
 	var flags := PackedByteArray()
 	flags.resize(s.capacity)
@@ -84,7 +84,8 @@ func total_active() -> int:
 
 
 ## Circle damage across every type (AoEs). Returns hits applied.
-func circle_damage(center: Vector2, radius: float, amount: float, mask: int, knock_scale: float) -> int:
+## proc_depth flows through so reactions can chain exactly once (§5.4).
+func circle_damage(center: Vector2, radius: float, amount: float, mask: int, knock_scale: float, proc_depth: int = 0) -> int:
 	var hits := 0
 	var radius_sq := radius * radius
 	for h in hordes:
@@ -96,7 +97,7 @@ func circle_damage(center: Vector2, radius: float, amount: float, mask: int, kno
 			if away.length_squared() > radius_sq:
 				continue
 			var push := away.normalized() if away.length() > 0.01 else Vector2.RIGHT
-			s.damage(i, amount, push * knock_scale, mask)
+			s.damage(i, amount, push * knock_scale, mask, proc_depth)
 			hits += 1
 	return hits
 

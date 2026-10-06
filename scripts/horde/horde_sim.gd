@@ -10,10 +10,11 @@ extends RefCounted
 ## accumulate bounded separation from hash neighbors, integrate, clamp to arena,
 ## decay hit flash. All state lives in PackedArrays sized once to `capacity`.
 
-signal enemy_killed(at: Vector2)
-signal hit_event(pos: Vector2, amount: float, tag_mask: int)
+signal enemy_killed(at: Vector2, status_mask: int)
+signal hit_event(pos: Vector2, amount: float, tag_mask: int, target_status: int)
 signal exploded(pos: Vector2, radius: float, damage: float)
 signal shot(pos: Vector2, dir: Vector2, damage: float, speed: float)
+signal reaction_fired(kind: StringName, pos: Vector2, radius: float, amount: float)
 
 const DEFAULT_CAPACITY := 10000
 const ARENA_HALF_EXTENT := 1400.0
@@ -133,21 +134,47 @@ func clear_all() -> void:
 	active_count = 0
 
 
+## proc guardrails (architecture.md §5.4): reaction damage is scaled by
+## PROC_COEFFICIENT when the reaction itself was triggered at depth >= 1,
+## and reactions may only chain while proc_depth < 2 (once, then stop).
+const PROC_COEFFICIENT := 0.5
+const SHATTER_MIN_BASE := 10.0
+const STEAM_RADIUS := 120.0
+const STEAM_DAMAGE := 10.0
+const BLOOD_BOIL_RADIUS := 130.0
+const BLOOD_BOIL_DAMAGE := 14.0
+
+
 ## The single-pipeline damage entry: applies the two-category damage math
 ## (increased/more) by tag mask, applies statuses from source tags
-## (FIRE -> Burn, FROST -> Chill, BLOOD -> Bleed), emits hit_event, and
+## (FIRE -> Burn, FROST -> Chill, BLOOD -> Bleed), fires reactions when the
+## target's pre-hit status combines with the hit, emits hit_event, and
 ## emits enemy_killed + swap-removes on death. Returns true when lethal.
-func damage(i: int, amount: float, dir: Vector2, tag_mask: int = 0) -> bool:
+func damage(i: int, amount: float, dir: Vector2, tag_mask: int = 0, proc_depth: int = 0) -> bool:
 	if i < 0 or i >= active_count:
 		return false
+	var sm_before := status_mask[i]
 	var final := modified(amount, tag_mask)
+	# Shatter: a heavy direct Slash hit on a chilled enemy crits for double
+	if proc_depth == 0 and (tag_mask & Tags.SLASH_BIT) != 0 \
+			and (sm_before & CHILL_BIT) != 0 and amount >= SHATTER_MIN_BASE:
+		final *= 2.0
+		reaction_fired.emit(&"shatter", positions[i], 0.0, final)
 	healths[i] -= final
 	hit_flash[i] = 1.0
 	velocities[i] += dir * knockback_impulse
 	_apply_status_from_tags(i, tag_mask)
-	hit_event.emit(positions[i], final, tag_mask)
+	hit_event.emit(positions[i], final, tag_mask, sm_before)
+	# Steam Burst: a Frost hit landing on something already Burning
+	if proc_depth < 2 and (tag_mask & Tags.FROST_BIT) != 0 and (sm_before & BURN_BIT) != 0:
+		var coeff := 1.0 if proc_depth == 0 else PROC_COEFFICIENT
+		reaction_fired.emit(&"steam_burst", positions[i], STEAM_RADIUS, STEAM_DAMAGE * coeff)
 	if healths[i] <= 0.0:
-		enemy_killed.emit(positions[i])
+		# Blood Boil: dying while bleeding AND burning detonates fire
+		if proc_depth < 2 and (sm_before & BURN_BIT) != 0 and (sm_before & BLEED_BIT) != 0:
+			var coeff := 1.0 if proc_depth == 0 else PROC_COEFFICIENT
+			reaction_fired.emit(&"blood_boil", positions[i], BLOOD_BOIL_RADIUS, BLOOD_BOIL_DAMAGE * coeff)
+		enemy_killed.emit(positions[i], status_mask[i])
 		despawn(i)
 		return true
 	return false
@@ -300,7 +327,7 @@ func step(dt: float, target: Vector2) -> void:
 		for k in range(_dot_kills.size() - 1, -1, -1):
 			var i: int = _dot_kills[k]
 			if i < active_count:
-				enemy_killed.emit(positions[i])
+				enemy_killed.emit(positions[i], status_mask[i])
 				despawn(i)
 	if not _explode_queue.is_empty():
 		for k in range(_explode_queue.size() - 1, -1, -1):

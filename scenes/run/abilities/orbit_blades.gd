@@ -26,10 +26,10 @@ func setup(group: HordeGroup, player: Player) -> void:
 	_player = player
 
 
-func configure(rank: int) -> void:
+func configure(rank: int, potency := 1.0) -> void:
 	_blades = 2 + rank
-	_radius = 84.0 + 8.0 * float(rank)
-	_damage = 8.0 * (1.0 + 0.45 * float(rank - 1))
+	_radius = (84.0 + 8.0 * float(rank)) * potency
+	_damage = 8.0 * (1.0 + 0.45 * float(rank - 1)) * potency
 
 
 func tick_damage(dt: float) -> void:

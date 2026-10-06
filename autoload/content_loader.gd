@@ -8,6 +8,7 @@ var sword_upgrades: Array = []
 var universal_abilities: Array = []
 var enemies: Array = []
 var waves: Array = []
+var evolutions: Array = []
 var progression_curve: ProgressionCurve = null
 
 var _ability_index: Dictionary = {}
@@ -22,6 +23,7 @@ func load_all() -> void:
 	universal_abilities = _scan_dir("res://resources/universal_abilities")
 	enemies = _scan_dir("res://resources/enemies")
 	waves = _scan_dir("res://resources/waves")
+	evolutions = _scan_dir("res://resources/evolutions")
 	waves.sort_custom(func(a, b): return a.number < b.number)
 	var curves := _scan_dir("res://resources/progression")
 	if curves.size() > 0:

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"solar_halo"
+display_name = "Solar Halo"
+description = "EVOLVED — a ring of burning light orbits you, searing everything it touches."
+kind = "active"
+ap_cost = 5
+unlock_level = 1
+tags = 65
+max_rank = 5
+cooldown = 0.0
+effect_id = &"orbit_blades"
+magnitude = 1.6
+rarity_weight = 0.4

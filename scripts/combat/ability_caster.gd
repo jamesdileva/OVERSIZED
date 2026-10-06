@@ -15,6 +15,7 @@ extends Node2D
 ## the player's transform — they'd sit at world origin instead of following.
 
 signal effect_visual(id: StringName, pos: Vector2, radius: float)
+signal evolved(old_id: StringName, new_id: StringName)
 
 var _group: HordeGroup
 var _player: Player
@@ -22,6 +23,7 @@ var _run                       # run scene: holds xp_magnet_radius / xp_mult for
 var _boss_damage_at: Callable  # (pos, radius, amount, mask) — run applies it to the boss
 var _entries := {}             # id -> {"def": def, "rank": int, "cd": float}
 var _orbit: OrbitBlades = null
+var resonances := {}           # tag bit -> true when 3+ equipped abilities share it
 
 
 func _physics_process(dt: float) -> void:
@@ -80,11 +82,24 @@ func tick(dt: float) -> void:
 		_orbit.tick_damage(dt)
 
 
+## Evolve an equipped ability that hit the conditions (EvolutionDef):
+## the entry is replaced by the result def, carrying its rank over.
+func evolve(old_id: StringName, result: UniversalAbilityDef) -> bool:
+	var rank := rank_of(old_id)
+	if rank <= 0 or _entries.has(result.id):
+		return false
+	_entries.erase(old_id)
+	_entries[result.id] = {"def": result, "rank": rank, "cd": 0.0}
+	_refresh(result)
+	evolved.emit(old_id, result.id)
+	return true
+
+
 func _refresh(def: UniversalAbilityDef) -> void:
 	if def.kind == "passive":
 		_refresh_passives()
 	elif def.effect_id == &"orbit_blades":
-		_ensure_orbit()
+		_ensure_orbit(def)
 
 
 func _fire(def: UniversalAbilityDef, rank: int) -> void:
@@ -137,13 +152,19 @@ func _refresh_passives() -> void:
 	var xp_mult := 1.0
 	var armor := 0.0
 	var regen := 0.0
+	resonances.clear()
+	var tag_counts := {}   # tag bit -> number of equipped abilities carrying it
 	_group.clear_damage_mods()  # recomputed from scratch with the stats
 	for id in _entries:
 		var e: Dictionary = _entries[id]
 		var def: UniversalAbilityDef = e["def"]
+		var rank := int(e["rank"])
+		# resonance counting covers every equipped ability, active or passive
+		for bit in [Tags.FIRE_BIT, Tags.FROST_BIT, Tags.BLOOD_BIT]:
+			if (def.tags & bit) != 0:
+				tag_counts[bit] = int(tag_counts.get(bit, 0)) + 1
 		if def.kind != "passive":
 			continue
-		var rank := int(e["rank"])
 		match def.effect_id:
 			&"vitality":
 				max_hp += 20.0 * float(rank)
@@ -159,6 +180,12 @@ func _refresh_passives() -> void:
 				regen += def.magnitude * float(rank)
 			&"tag_amplifier":
 				_group.add_increased(def.tags, def.magnitude * float(rank))
+	# resonance tier-1 (architecture.md §5.4): 3+ equipped sharing an element
+	# grants +15% increased damage of that element
+	for bit in tag_counts:
+		if int(tag_counts[bit]) >= 3:
+			resonances[bit] = true
+			_group.add_increased(bit, 0.15)
 	_player.set_max_hp(max_hp)
 	_player.move_speed = speed
 	_player.armor = armor
@@ -167,10 +194,14 @@ func _refresh_passives() -> void:
 	_run.xp_mult = xp_mult
 
 
-func _ensure_orbit() -> void:
+func has_resonance(tag_bit: int) -> bool:
+	return resonances.get(tag_bit, false)
+
+
+func _ensure_orbit(def: UniversalAbilityDef) -> void:
 	if _orbit == null:
 		_orbit = OrbitBlades.new()
 		add_child(_orbit)
 		_orbit.setup(_group, _player)
-	_orbit.configure(int(_entries[&"orbit_blades"]["rank"]))
-	_orbit.tag_mask = _entries[&"orbit_blades"]["def"].tags
+	_orbit.configure(int(_entries[def.id]["rank"]), def.magnitude)
+	_orbit.tag_mask = def.tags

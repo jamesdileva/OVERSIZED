@@ -6,6 +6,7 @@ extends Node2D
 
 var radius := 200.0
 var life := 0.3
+var color := Color(1.0, 0.85, 0.5)   # player-kit gold; reactions override
 
 var _t := 0.0
 
@@ -22,4 +23,4 @@ func _draw() -> void:
 	var k := clampf(_t / life, 0.0, 1.0)
 	draw_arc(
 		Vector2.ZERO, radius * (0.25 + 0.75 * k), 0.0, TAU, 48,
-		Color(1.0, 0.85, 0.5, 1.0 - k), 10.0 * (1.0 - k) + 2.0)
+		Color(color.r, color.g, color.b, 1.0 - k), 10.0 * (1.0 - k) + 2.0)

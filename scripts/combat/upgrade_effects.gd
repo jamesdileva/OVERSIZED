@@ -41,18 +41,48 @@ static func apply(def: SwordUpgradeDef, ctx: Dictionary) -> void:
 			push_warning("unknown upgrade effect_id: %s" % def.effect_id)
 
 
-## Offer roller for the shared choice screen: distinct picks, weighted by
-## rarity_weight, upgrades at max stacks excluded, fewer offers than requested
+## Card rarity tier from the offer weight — display-only for now (colors +
+## labels); stat implications arrive with 3.x balance if ever.
+static func rarity_tier(weight: float) -> StringName:
+	if weight >= 0.8:
+		return &"common"
+	if weight >= 0.5:
+		return &"uncommon"
+	return &"rare"
+
+
+## Synergy-biased offer weighting (architecture.md §5.4): a def matching N
+## of the player's active tags weighs 1 + 0.25*N, capped at double.
+static func offer_weight(def, bias_tags: int) -> float:
+	var w: float = def.rarity_weight
+	if bias_tags != 0:
+		var shared: int = def.tags & bias_tags
+		var matches := 0
+		for bit in [Tags.FIRE_BIT, Tags.FROST_BIT, Tags.BLOOD_BIT, Tags.SLASH_BIT,
+				(1 << Tags.Tag.ORBIT), (1 << Tags.Tag.BURST), (1 << Tags.Tag.PROJECTILE),
+				(1 << Tags.Tag.ZONE), (1 << Tags.Tag.ON_HIT), (1 << Tags.Tag.ON_KILL),
+				(1 << Tags.Tag.PERIODIC), (1 << Tags.Tag.LIFESTEAL), (1 << Tags.Tag.KNOCKBACK),
+				(1 << Tags.Tag.EXECUTE)]:
+			if (shared & bit) != 0:
+				matches += 1
+		w *= minf(1.0 + 0.25 * matches, 2.0)
+	return w
+
+
+## Offer roller for the shared choice screen: distinct picks weighted by
+## offer_weight, maxed/banished defs excluded, fewer offers than requested
 ## when the eligible pool is small. Duck-typed on purpose: works for any def
 ## with id / rarity_weight / max_stacks OR max_rank (UniversalAbilityDef).
-static func roll_upgrade_offers(pool: Array, taken: Dictionary, count := 3) -> Array:
+static func roll_upgrade_offers(pool: Array, taken: Dictionary, count := 3, banished: Dictionary = {}, bias_tags: int = 0) -> Array:
 	var weighted := []
 	for def in pool:
+		if banished.get(def.id, false):
+			continue
 		var stacks: int = taken.get(def.id, 0)
 		var cap: int = def.max_stacks if "max_stacks" in def else def.max_rank
 		if cap > 0 and stacks >= cap:
 			continue
-		var w := maxi(int(round(def.rarity_weight * 10.0)), 1)
+		var w := maxi(int(round(offer_weight(def, bias_tags) * 10.0)), 1)
 		for k in w:
 			weighted.append(def)
 	var offers := []

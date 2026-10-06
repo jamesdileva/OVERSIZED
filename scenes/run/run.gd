@@ -27,6 +27,9 @@ var character_level := 1
 var pending_level_choices := 0
 var xp_magnet_radius := 90.0    # written by AbilityCaster passive recompute
 var xp_mult := 1.0              # written by AbilityCaster passive recompute
+var rerolls_left := 2
+var banishes_left := 1
+var banished := {}              # def id -> true, excluded from the rest of this run
 var _choice_kind := ""               # "wave" | "level" | "opening"
 
 var _dead := false
@@ -90,6 +93,8 @@ func _ready() -> void:
 	choice_screen = ChoiceScreen.new()
 	add_child(choice_screen)
 	choice_screen.chosen.connect(_on_choice_made)
+	choice_screen.rerolled.connect(_on_reroll)
+	choice_screen.banished.connect(_on_banish)
 
 	# a renderer + wiring per enemy archetype
 	for h in group.hordes:
@@ -100,12 +105,16 @@ func _ready() -> void:
 		var diameter := 14.0 * (d.scale if d != null else 1.0)
 		view.setup(s, diameter, d.tint if d != null else Color(0.9, 0.32, 0.22))
 		s.exploded.connect(_on_enemy_exploded)
+		s.reaction_fired.connect(_on_reaction)
 		s.shot.connect(func(pos: Vector2, dir: Vector2, dmg: float, speed: float) -> void:
 			hostile_shots.fire(pos, dir, dmg, speed))
 	# kills + XP flow through the group's re-emitted signal (xp_value attached)
-	group.enemy_killed.connect(func(at: Vector2, xp_value: float) -> void:
+	group.enemy_killed.connect(func(at: Vector2, xp_value: float, status: int) -> void:
 		kills += 1
-		gems.spawn(at, xp_value * (1.0 + float(director.wave_number) * 0.06)))
+		gems.spawn(at, xp_value * (1.0 + float(director.wave_number) * 0.06))
+		# Pyre Resonance: kills spread fire — 0-damage Burn application nearby
+		if caster.has_resonance(Tags.FIRE_BIT):
+			group.circle_damage(at, 140.0, 0.0, Tags.FIRE_BIT, 0.0, 1))
 
 	_build_hud()
 	DebugConsole.register_handler(self, {
@@ -275,12 +284,118 @@ func _clear_wave() -> void:
 	for h in group.hordes:
 		h["sim"].clear_all()
 	EventBus.wave_cleared.emit(director.wave_number)
-	var offers := UpgradeEffects.roll_upgrade_offers(ContentLoader.sword_upgrades, taken_upgrades, 3)
-	_choice_kind = "wave"
+	var offers := UpgradeEffects.roll_upgrade_offers(
+		ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
+	_show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+
+
+## Shared pause-and-present for every choice screen variant (wave / level /
+## opening). Returns false when there's nothing to offer — no pause at all.
+func _show_choice(kind: String, title: String, offers: Array, owned: Dictionary) -> bool:
+	if offers.is_empty():
+		return false
+	_choice_kind = kind
 	get_tree().paused = true
-	choice_screen.open("WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+	choice_screen.open(title, offers, owned, rerolls_left, banishes_left)
 	if _bot:
 		_bot_auto_pick()
+	return true
+
+
+func _bias_tags() -> int:
+	var mask := sword.hit_tag_mask
+	for d in _equipped_defs:
+		mask |= d.tags
+	return mask
+
+
+## Evolution framework (architecture.md §5.4): an equipped ability at max
+## rank + its required Sword Upgrade transforms it. Data-driven — new
+## evolutions are .tres files in resources/evolutions/.
+func _check_evolutions() -> void:
+	for evo in ContentLoader.evolutions:
+		var base_def = ContentLoader.ability_by_id(evo.ability_id)
+		if base_def == null or caster.rank_of(evo.ability_id) < base_def.max_rank:
+			continue
+		if not taken_upgrades.has(evo.requires_upgrade_id):
+			continue
+		if caster.rank_of(evo.result_id) > 0:
+			continue
+		var result = ContentLoader.ability_by_id(evo.result_id)
+		if result != null and caster.evolve(evo.ability_id, result):
+			_announce("%s evolved into %s!" % [base_def.display_name, result.display_name])
+			camera.add_trauma(0.5)
+			_spawn_ring(player.position, 240.0, Tags.color_for(Tags.Tag.FIRE))
+
+
+func _announce(text: String) -> void:
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 30)
+	layer.add_child(label)
+	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	var tween := create_tween()
+	tween.tween_interval(1.8)
+	tween.tween_property(label, "modulate:a", 0.0, 0.6)
+	tween.tween_callback(layer.queue_free)
+
+
+func _on_reroll() -> void:
+	rerolls_left -= 1
+	match _choice_kind:
+		"wave":
+			var offers := UpgradeEffects.roll_upgrade_offers(
+				ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
+			_show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+		"level":
+			var offers := UpgradeEffects.roll_upgrade_offers(
+				_equipped_defs, caster.taken_ranks(), 3, banished, _bias_tags())
+			_show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
+		"opening":
+			_open_opening_pick()
+
+
+func _on_banish(index: int) -> void:
+	var def = choice_screen.offers[index]
+	banished[def.id] = true
+	banishes_left -= 1
+	match _choice_kind:
+		"wave":
+			var offers := UpgradeEffects.roll_upgrade_offers(
+				ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
+			_show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+		"level":
+			var offers := UpgradeEffects.roll_upgrade_offers(
+				_equipped_defs, caster.taken_ranks(), 3, banished, _bias_tags())
+			_show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
+		"opening":
+			_open_opening_pick()
+
+
+func _on_reaction(kind: StringName, pos: Vector2, radius: float, amount: float) -> void:
+	match kind:
+		&"steam_burst":
+			group.circle_damage(pos, radius, amount, Tags.FIRE_BIT, 0.2, 1)
+			_spawn_ring(pos, radius, Tags.color_for(Tags.Tag.BURN))
+			camera.add_trauma(0.15)
+		&"blood_boil":
+			group.circle_damage(pos, radius, amount, Tags.FIRE_BIT, 1.0, 1)
+			_spawn_ring(pos, radius, Tags.color_for(Tags.Tag.BLEED))
+			camera.add_trauma(0.3)
+			_hit_stop()
+		&"shatter":
+			numbers.pop(pos, amount, true)
+			camera.add_trauma(0.12)
+
+
+func _spawn_ring(pos: Vector2, radius: float, color: Color) -> void:
+	var ring := BurstRing.new()
+	ring.position = pos
+	ring.radius = radius
+	ring.color = color
+	add_child(ring)
 
 
 func _on_choice_made(index: int) -> void:
@@ -290,6 +405,7 @@ func _on_choice_made(index: int) -> void:
 			taken_upgrades[def.id] = int(taken_upgrades.get(def.id, 0)) + 1
 			UpgradeEffects.apply(def, _upgrade_ctx())
 			EventBus.upgrade_selected.emit(def)
+			_check_evolutions()
 			if pending_level_choices > 0:
 				pending_level_choices -= 1
 				if _open_level_choice():
@@ -312,6 +428,7 @@ func _on_choice_made(index: int) -> void:
 			else:
 				caster.rank_up(def.id)
 			EventBus.upgrade_selected.emit(def)
+			_check_evolutions()
 			if pending_level_choices > 0:
 				pending_level_choices -= 1
 				if _open_level_choice():
@@ -535,18 +652,11 @@ func _bot_steer() -> void:
 
 
 ## Level-up cards draw from the EQUIPPED loadout only (architecture.md §5.2).
-## Returns false when the loadout has nothing left to offer (no pause).
+## Returns false when the loadout has nothing left to offer (no pause at all).
 func _open_level_choice() -> bool:
 	var offers := UpgradeEffects.roll_upgrade_offers(
-		_equipped_defs, caster.taken_ranks(), 3)
-	if offers.is_empty():
-		return false
-	_choice_kind = "level"
-	get_tree().paused = true
-	choice_screen.open("LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
-	if _bot:
-		_bot_auto_pick()
-	return true
+		_equipped_defs, caster.taken_ranks(), 3, banished, _bias_tags())
+	return _show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
 
 
 ## Opening-ability pick: 2-3 random equipped-but-inactive actives.
@@ -560,12 +670,7 @@ func _open_opening_pick() -> bool:
 		return false
 	pool.shuffle()
 	var offers := pool.slice(0, mini(3, pool.size()))
-	_choice_kind = "opening"
-	get_tree().paused = true
-	choice_screen.open("CHOOSE YOUR OPENING ABILITY", offers, caster.taken_ranks())
-	if _bot:
-		_bot_auto_pick()
-	return true
+	return _show_choice("opening", "CHOOSE YOUR OPENING ABILITY", offers, caster.taken_ranks())
 
 
 func _bot_auto_pick() -> void:
