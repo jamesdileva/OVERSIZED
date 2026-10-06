@@ -354,4 +354,44 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 - Spawn composition as per-WaveDef overrides (current def-level min_wave/weight covers the roadmap's "curves per wave range").
 - Art-lane timing exercise (first three enemies) — lands with the first real pixel-art sprint; the asset tracker CSV stub with it.
 
-**Next**: Sprint 2.4 — the synergy layer (reactions: Steam Burst/Shatter/Blood Boil; resonance tier-1; reroll/banish; synergy-biased offers; evolution framework + one working example; proc guardrails). **Playtest checkpoint after this sprint** — the full `PLAYTEST.md` batch.
+---
+
+## Sprint 2.4 — Synergy layer (2026-10-01)
+
+**Scope** (from `sprint-roadmap.md`, Phase 2 — Sprint 2.4, approved before build): reactions (Steam Burst, Shatter, Blood Boil); resonance tier-1; reroll and banish; synergy-biased offer weighting; evolution framework + one working example; proc guardrails. **Playtest checkpoint follows this sprint** — the user plays waves 1-30 against `PLAYTEST.md` before 2.5.
+
+**Built**
+
+- **Reactions in the pipeline** (`HordeSim.damage`): `hit_event` now carries the target's **pre-hit status mask**; reactions read it — **Steam Burst** (Frost hit on Burning → fire AoE at the target), **Shatter** (heavy Slash hit on Chilled → double damage), **Blood Boil** (death while Burning+Bleeding → fire detonation). Reaction damage re-enters `circle_damage` at **proc_depth + 1**; reactions only chain while depth < 2 and chained depth scales by **PROC_COEFFICIENT 0.5** — the deep-dive guardrails, live.
+- **Resonance tier-1** (caster recompute): 3+ equipped abilities sharing Fire/Frost/Blood grant **+15% increased** of that element; **Pyre Resonance** (Fire) additionally spreads Burn to nearby enemies on every kill (0-damage tag application through the pipeline — safe, no mid-loop despawns).
+- **Offers**: synergy bias — a def matching N of the player's active tags weighs 1 + 0.25×N capped at ×2 (`offer_weight`, bias mask = equipped loadout tags + sword infusions); **banished defs excluded**; rarity tiers (`[common]/[uncommon]/[rare]`) displayed on cards.
+- **Choice screen**: Reroll button + per-card Banish buttons driven by the per-run allotment (2 rerolls / 1 banish), shared across wave/level/opening choices; the run owns the state and re-rolls on demand.
+- **Evolution framework**: `EvolutionDef` resources in `resources/evolutions/`; `_check_evolutions()` fires after upgrade takes and level picks when an equipped ability sits at max rank with its required upgrade taken — the entry swaps to the result def, rank carries, banner + ring announce. First example: **Orbiting Blades (rank 5) + Fire Infusion → Solar Halo** (potency-1.6 burning orbit).
+
+**Verified**
+
+- Tests: **102/102 pass** — reaction triggers (Steam/Shatter/Blood Boil), the depth-2 guardrail, Shatter's doubled damage and its light-hit threshold, resonance math (25% amplifier + 15% resonance = +40% on Fire), offer bias statistics (×1.25 per matched tag, ×2 cap), banish exclusion, evolution swap with rank carry and orbit reconfiguration, plus all prior suites.
+- Boot clean; bot 3 sim-min with synergy live: wave 6 / 408 kills / no errors.
+- `PLAYTEST.md` Batch 2 filled with concrete per-feature checks — the playtest handoff is ready.
+
+**Findings worth keeping**
+
+- **A file Write can be lost silently** — the choice screen's 2.4 rewrite reported success but the disk kept the old version, discovered only because tests failed against features I "knew" existed. After any surprising failure, `grep`/`md5sum` the disk file before re-deriving logic from memory.
+- **Line-numbered sed patches on a shifting file chew the wrong lines** — the bias test lost its tags-assignment line to an off-by-N sed and failed for a phantom reason. Read the region, then edit by content, not by number.
+- Signal-arity changes ripple: `enemy_killed` gained a status parameter and every closure touching it needed updating — the compile guard caught the parse-level ones, the runtime ones surfaced as test failures with clear labels.
+- Test statistics need headroom: a 1.25× weight over 400 draws gives ~56/44 splits — asserting a 2:1 outcome on that edge is flaky by construction. Assert the deterministic weight math directly, and use the capped ×2 edge for distribution checks.
+
+**Decisions & deviations**
+
+- Reactions detect off the **pre-hit** status mask (a Frost hit on an already-Burning enemy bursts; the Frost hit's own Chill doesn't gate it).
+- Shatter requires a direct hit (proc_depth 0) and base damage ≥ 10 ("heavy") — light pokes don't shatter.
+- Pyre's burn-spread applies Burn through 0-damage pipeline hits — no special-case status code outside the pipeline.
+- SFX for reactions deferred (AudioBus API ready, no assets yet — the later audio pass fills it).
+
+**Deferred**
+
+- Contagion/Overload reactions (need Poison/Shock statuses — content 2.3+); resonance tier-2; more evolutions (3 for EA per the budget).
+- OnHit/OnKill internal-cooldown helper (deep-dive guardrail) — our on-kill sources are naturally rate-limited by kill cadence; revisit when abilities add on-hit triggers.
+- Loadout rename/delete UI; `unlock_level` display in loadout (2.2 deferred, still open).
+
+**Next**: **PLAYTEST CHECKPOINT** — the user plays waves 1-30 against `PLAYTEST.md` (Batch 1 + Batch 2). After triage: Sprint 2.5 — cosmetics, economy, settings (Glory spending, 2-3 placeholder sword skins, settings menu skeleton, first economy tuning pass, persistence hardening), closing Phase 2.
