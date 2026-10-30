@@ -395,3 +395,49 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 - Loadout rename/delete UI; `unlock_level` display in loadout (2.2 deferred, still open).
 
 **Next**: **PLAYTEST CHECKPOINT** — the user plays waves 1-30 against `PLAYTEST.md` (Batch 1 + Batch 2). After triage: Sprint 2.5 — cosmetics, economy, settings (Glory spending, 2-3 placeholder sword skins, settings menu skeleton, first economy tuning pass, persistence hardening), closing Phase 2.
+
+---
+
+## Sprint 2.5 — Cosmetics, economy pass, settings (2026-10-30) — PHASE 2 COMPLETE
+
+**Scope** (from `sprint-roadmap.md`, Phase 2 — Sprint 2.5, approved before build): cosmetics equip slots with the zero-stat `CosmeticItemDef`; Glory awards and spending; 2-3 placeholder cosmetic sets; settings menu skeleton wired to buses; economy tuning pass #1; persistence hardening. User playtest before this sprint: reached wave ~100 informally, "felt good" — difficulty-curve flattening at depth noted for the 3.x balance pass.
+
+**Built**
+
+- `CosmeticItemDef` — **zero-stat schema by construction**: the resource has no damage/health/speed/magnitude fields to abuse; everything on it is visual (tints for placeholder art, real art swaps in Phase 3). 7 cosmetics as `.tres`: Ember/Glacier/Void sets (hero skin + sword skin each) + an Ember trail, priced 30-150 Glory.
+- `MetaProgression` cosmetics: `buy_cosmetic` (Glory check + reason strings), `equip_cosmetic`/`unequip_slot` per slot, ownership + equipment persisted.
+- **Economy pass #1**: reward formulas moved to named consts (`REWARD_XP_PER_WAVE` etc.); Glory now rewards depth — 10 + 3/wave + 15/boss, only 0.05/kill — so grinding kills pays much less than pushing waves.
+- **Persistence hardening**: atomic save (write `.tmp` → keep old as `.bak` → rename over live), unreadable live save falls back to `.bak`, settings file carries `schema_version` too.
+- **Settings scene** (menu + hub): Master/Music/SFX/UI sliders wired to `AudioBus` buses, fullscreen toggle, persisted to `user://audio_settings.json` with `schema_version`.
+- Cosmetics shop scene (Hub → Cosmetics): buy with Glory, equip/unequip per slot; the run applies hero tint, blade + smear colors, and a motion trail (visual-only).
+- `AudioBus` gained volume/fullscreen persistence alongside the 2.2 voice-limit skeleton.
+
+**Verified**
+
+- Tests: **111/111 pass** — cosmetics load/buy/equip/persist, **zero-stat schema proof** (no stat fields exist on CosmeticItemDef instances), settings round-trip from disk, atomic rewrite leaves a `.bak`, plus all prior suites.
+- Boot clean; bot 3 sim-min: wave 6 / 396 kills / no errors.
+- Screenshots: cosmetics shop (7 items, Glory balance, Buy buttons), settings, cosmetics applied in-run (level-up screen caught mid-capture; the ember hero/blade/trail visible behind it — cosmetic visuals confirmed live).
+
+**Findings worth keeping**
+
+- **Generated content needs the same scrutiny as code**: my bash generator produced 5-component `Color(...)` constructors and escaped-quote display names across the cosmetic `.tres` files — three rounds of load-diagnostics (a per-file load script) beat guessing. If a `.tres` batch is generated, load-and-assert every file immediately.
+- **A file Write was lost again** (choice screen in 2.4, cosmetics scene fields here) — twice now a "successful" Write left stale disk content. The workable recovery: `md5sum`/`head` the file via Bash (bypassing the tool's cache), then rewrite.
+- **Scholar's Wit never boosted gem XP**: the caster wrote `xp_mult` on the run scene while `XpGems` read its own member — two sources of truth for one stat. Now the caster syncs `gems.xp_mult` directly. Rule of thumb going forward: derived stats get ONE owner and explicit sync points.
+- `_take_shot` early-returned without quitting on headless — any early-return path in a quit-responsible function must still quit.
+- The benign `12 resources still in use at exit` warning appears on every forced quit — cosmetic, but noted so it isn't mistaken for a leak.
+
+**Decisions & deviations**
+
+- Victory-pose slot exists in the schema but has no content yet (needs a pose animation — Phase 3 art).
+- Trail cosmetics = fading motion trail behind the hero (placeholder for the particle trail in the 2.4-lane VFX kit).
+- Glory economy now front-loads the first cosmetic (~30 Glory ≈ 2 early runs) so the spend loop is testable immediately.
+- Settings persistence lives in `AudioBus` (it owns the buses) rather than a separate SettingsManager — one owner per concern.
+
+**Deferred**
+
+- More cosmetic sets (EA tier = 6), victory-pose content, real art (Phase 3).
+- Audio: reaction/ability SFX through the AudioBus voice-limit API (assets still pending).
+- Difficulty curve revisit at depth (user reached wave ~100 — enemies scale too slowly past ~40; balance pass in 3.x with real play data).
+
+**Next**: **Batch 3 playtest** against `PLAYTEST.md` (cosmetics/settings/economy + regression), triage, then Phase 2 closes and Phase 3 (Content & Balance) opens — content fill to the EA tier, first music tracks, art lock at 3.3.
+
