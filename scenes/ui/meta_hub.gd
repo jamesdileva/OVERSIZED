@@ -63,6 +63,17 @@ func _ready() -> void:
 	loadout.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/loadout.tscn"))
 	vb.add_child(loadout)
+	var cosmetics := Button.new()
+	cosmetics.text = "Cosmetics"
+	cosmetics.custom_minimum_size = Vector2(280, 48)
+	cosmetics.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/ui/cosmetics.tscn"))
+	vb.add_child(cosmetics)
+	var settings := Button.new()
+	settings.text = "Settings"
+	settings.custom_minimum_size = Vector2(280, 48)
+	settings.pressed.connect(func() -> void: GameManager.open_settings(GameManager.State.HUB))
+	vb.add_child(settings)
 	var back := Button.new()
 	back.text = "Back to Menu"
 	back.custom_minimum_size = Vector2(280, 48)

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CosmeticItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/cosmetic_item_def.gd" id="1_cos"]
+
+[resource]
+script = ExtResource("1_cos")
+id = &"ember_sword"
+display_name = "Ember Sword Skin"
+description = "A burning-orange blade to match the Ember hero."
+slot = "sword_skin"
+glory_cost = 50
+tint = Color(1.0, 0.5, 0.15, 1)
+smear_color = Color(1.0, 0.45, 0.1, 0.35)

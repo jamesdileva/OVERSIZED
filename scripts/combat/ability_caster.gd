@@ -192,6 +192,7 @@ func _refresh_passives() -> void:
 	_player.regen_ps = regen
 	_run.xp_magnet_radius = magnet
 	_run.xp_mult = xp_mult
+	_run.gems.xp_mult = xp_mult   # gems apply the multiplier at pickup
 
 
 func has_resonance(tag_bit: int) -> bool:

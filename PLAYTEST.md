@@ -63,3 +63,16 @@ Living list for batch playtests — one section per sprint's additions, newest l
 - [ ] Dash, sword feel, damage numbers, shake, hit-stop all still feel right
 - [ ] 15-minute-ish session without crashes or slowdown creep
 - [ ] Save survives an app restart
+
+---
+
+## Batch 3 — after Sprint 2.5 (cosmetics, economy, settings)
+
+### Sprint 2.5 — cosmetics, economy, settings
+- [ ] **Cosmetics shop**: Hub → Cosmetics — 7 items listed with Glory costs; buying one deducts Glory
+- [ ] **Equip**: an owned cosmetic shows Equip → EQUIPPED state; unequip works
+- [ ] **Visuals in run**: Ember set equipped → hero glows warm, blade turns orange, ember trail follows you; Glacier set turns everything cyan
+- [ ] **Glory economy**: a couple of runs earn enough Glory for the first cosmetic (~30); deeper runs earn noticeably more
+- [ ] **Settings** (menu + hub): Master/Music/SFX/UI sliders change volumes immediately; Fullscreen toggle works; settings survive an app restart
+- [ ] **Persistence hardening**: profile survives an app restart with cosmetics owned/equipped intact
+- [ ] Zero-stats rule: cosmetics change NOTHING about damage/HP/speed (a fresh run with the Void set plays identically to a bare run)

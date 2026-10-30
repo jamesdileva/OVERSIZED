@@ -47,6 +47,8 @@ func _initialize() -> void:
 	_test_resonance()
 	_test_offer_bias_banish()
 	_test_evolution()
+	_test_cosmetics()
+	_test_settings_and_atomic_save()
 	print("")
 	if failures == 0:
 		print("ALL TESTS PASSED")
@@ -83,6 +85,9 @@ func _test_scripts_compile() -> void:
 		"res://scripts/resource_defs/progression_curve.gd",
 		"res://scripts/resource_defs/enemy_def.gd",
 		"res://scripts/resource_defs/evolution_def.gd",
+		"res://scripts/resource_defs/cosmetic_item_def.gd",
+		"res://scenes/ui/cosmetics.gd",
+		"res://scenes/ui/settings.gd",
 		"res://scripts/horde/horde_group.gd",
 		"res://scenes/run/wave_director/wave_director.gd",
 		"res://scenes/run/player/player.gd",
@@ -1038,3 +1043,77 @@ func _test_evolution() -> void:
 	check(caster._orbit != null and absf(caster._orbit._radius - 198.4) < 0.1,
 			"orbit hazard reconfigured with Solar Halo potency (radius 198.4)")
 	player.free()
+
+
+func _test_cosmetics() -> void:
+	print("cosmetics: zero-stat schema, buy/equip/persist")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	check(loader.cosmetics.size() >= 7, "at least 7 cosmetic .tres files load")
+	var zero_stats := true
+	for c in loader.cosmetics:
+		# the hard rule, enforced at the schema: no stat fields exist to spend on
+		if "damage" in c or "max_health" in c or "magnitude" in c or "ap_cost" in c:
+			zero_stats = false
+	check(zero_stats, "CosmeticItemDef carries zero stat fields (hard rule)")
+	var mp = load("res://autoload/meta_progression.gd").new()
+	mp.save_path = "user://test_cosmetic_save.json"
+	mp.curve = loader.progression_curve
+	mp.cosmetic_lookup = Callable(loader, "cosmetic_by_id")
+	mp.glory = 100
+	var ember_sword = null
+	for c in loader.cosmetics:
+		if c.id == &"ember_sword":
+			ember_sword = c
+	var err: String = mp.buy_cosmetic(ember_sword)
+	check(err == "" and mp.owns_cosmetic(&"ember_sword") and mp.glory == 50,
+			"buying Ember Sword (50) from 100 Glory leaves 50")
+	err = mp.buy_cosmetic(ember_sword)
+	check(err != "" and mp.glory == 50, "double-buy refused without charge")
+	var missing = null
+	for c in loader.cosmetics:
+		if c.id == &"void_sword":
+			missing = c
+	err = mp.buy_cosmetic(missing)  # Void Sword costs 150 > 50 left
+	check(err != "" and mp.glory == 50, "unaffordable purchase refused with reason")
+	err = mp.equip_cosmetic(&"ember_sword")
+	check(err == "" and mp.equipped_cosmetic_defs().has("sword_skin"), "owned cosmetic equips into its slot")
+	mp.save()
+	var mp2 = load("res://autoload/meta_progression.gd").new()
+	mp2.save_path = mp.save_path
+	mp2.cosmetic_lookup = Callable(loader, "cosmetic_by_id")
+	mp2.load_save()
+	check(mp2.owns_cosmetic(&"ember_sword") and mp2.equipped_cosmetic_defs().has("sword_skin"),
+			"cosmetic ownership + equipment survive save/load")
+	check(mp2.equipped_cosmetic_defs()["sword_skin"].tint == ember_sword.tint,
+			"equipped cosmetic resolves to its def")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(mp.save_path))
+
+
+func _test_settings_and_atomic_save() -> void:
+	print("settings + atomic save: volumes round-trip, .bak backup on rewrite")
+	var ab = load("res://autoload/audio_bus.gd").new()
+	ab.SETTINGS_PATH = "user://test_audio_settings.json"
+	ab.set_volume("Music", 0.4)
+	ab.set_volume("SFX", 0.9)
+	var ab2 = load("res://autoload/audio_bus.gd").new()
+	ab2.SETTINGS_PATH = ab.SETTINGS_PATH
+	ab2.load_settings()
+	check(absf(ab2.volumes["Music"] - 0.4) < 0.01 and absf(ab2.volumes["SFX"] - 0.9) < 0.01,
+			"audio settings round-trip from disk")
+	var f := FileAccess.open(ab.SETTINGS_PATH, FileAccess.READ)
+	var text := f.get_as_text()
+	f.close()
+	check("\"schema_version\": 1" in text, "settings file carries schema_version")
+	# atomic save: rewriting the meta profile leaves a .bak behind
+	var mp = load("res://autoload/meta_progression.gd").new()
+	mp.save_path = "user://test_atomic_save.json"
+	mp.record_run(5, 100, 0)
+	mp.record_run(8, 150, 1)
+	check(FileAccess.file_exists(mp.save_path + ".bak"), "rewrite keeps the previous save as .bak")
+	var mp2 = load("res://autoload/meta_progression.gd").new()
+	mp2.save_path = mp.save_path
+	mp2.load_save()
+	check(mp2.best_wave == 8 and mp2.total_runs == 2, "latest profile state loads after atomic swap")
+	for p in [mp.save_path, mp.save_path + ".bak", ab.SETTINGS_PATH]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(p))

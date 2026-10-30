@@ -19,6 +19,13 @@ const SCENES := {
 
 var state: State = State.MENU
 var last_run: Dictionary = {}
+var settings_return: State = State.HUB   # Settings opens from menu or hub
+
+
+func open_settings(from: State) -> void:
+	settings_return = from
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/ui/settings.tscn")
 
 # bot smoke-test bookkeeping — autoloads survive reload_current_scene
 var bot_active := false
@@ -46,6 +53,14 @@ func _ready() -> void:
 			# hub sub-screen — direct scene change, not a state-machine state
 			get_tree().paused = false
 			get_tree().change_scene_to_file("res://scenes/ui/loadout.tscn")
+			_ui_shot(frames / 60.0)
+			return
+		if to_name == "cosmetics":
+			var gl_idx := uargs.find("--glory")
+			if gl_idx != -1 and gl_idx + 1 < uargs.size():
+				MetaProgression.glory = maxi(int(uargs[gl_idx + 1]), 0)
+			get_tree().paused = false
+			get_tree().change_scene_to_file("res://scenes/ui/cosmetics.tscn")
 			_ui_shot(frames / 60.0)
 			return
 		var target := State.MENU

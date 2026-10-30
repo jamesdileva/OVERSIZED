@@ -69,6 +69,16 @@ func _ready() -> void:
 	sword.combo_burst.connect(_on_combo_burst)
 	sword.boss_getter = func() -> Boss: return boss
 
+	# equipped cosmetics (visual-only — CosmeticItemDef carries zero stats)
+	var cosmetics := MetaProgression.equipped_cosmetic_defs()
+	if cosmetics.has("hero_skin"):
+		player.set_hero_tint(cosmetics["hero_skin"].tint)
+	if cosmetics.has("sword_skin"):
+		sword.blade_color = cosmetics["sword_skin"].tint
+		sword.smear_color = cosmetics["sword_skin"].smear_color
+	if cosmetics.has("trail"):
+		player.trail_color = cosmetics["trail"].tint
+
 	caster = AbilityCaster.new()
 	player.add_child(caster)
 	caster.setup(group, player, self, _boss_damage_at)
@@ -168,6 +178,7 @@ func _ready() -> void:
 
 	if _shot_mode:
 		Engine.max_fps = 60
+		player.invulnerable = true   # automation: a dead player changes scenes and kills the pending capture
 		if _shot_abilities:
 			# bring every active online so screenshots show them firing
 			for def in ContentLoader.universal_abilities:
@@ -178,6 +189,14 @@ func _ready() -> void:
 			for d in ContentLoader.sword_upgrades:
 				if d.id == &"fire_infusion":
 					UpgradeEffects.apply(d, _upgrade_ctx())
+		if _shot_abilities and uargs.has("--demo_cosmetics"):
+			# grant + equip the Ember set so screenshots show cosmetics applied;
+			# XP gain zeroed so level-up pauses never block the capture
+			xp_mult = 0.0
+			for cdef in ContentLoader.cosmetics:
+				if not MetaProgression.owns_cosmetic(cdef.id):
+					MetaProgression.owned_cosmetics.append(cdef.id)
+				MetaProgression.equip_cosmetic(cdef.id)
 		if _shot_boss and sw_idx == -1:
 			director.wave_number = 9
 			director.advance()
@@ -557,11 +576,10 @@ func _hit_stop() -> void:
 
 
 func _take_shot() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
-	var img := get_viewport().get_texture().get_image()
-	if img != null and not img.is_empty():
-		img.save_png("user://sprint12_shot.png")
+	if DisplayServer.get_name() != "headless":
+		var img := get_viewport().get_texture().get_image()
+		if img != null and not img.is_empty():
+			img.save_png("user://sprint12_shot.png")
 	get_tree().quit()
 
 

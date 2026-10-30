@@ -34,6 +34,11 @@ func _ready() -> void:
 	start.add_theme_font_size_override("font_size", 22)
 	start.pressed.connect(func() -> void: GameManager.goto(GameManager.State.RUN))
 	vb.add_child(start)
+	var settings := Button.new()
+	settings.text = "Settings"
+	settings.custom_minimum_size = Vector2(260, 48)
+	settings.pressed.connect(func() -> void: GameManager.open_settings(GameManager.State.MENU))
+	vb.add_child(settings)
 	var quit := Button.new()
 	quit.text = "Quit"
 	quit.custom_minimum_size = Vector2(260, 48)

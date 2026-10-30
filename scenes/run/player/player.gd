@@ -28,12 +28,15 @@ var bot_dir := Vector2.ZERO
 var invulnerable := false      # bot sessions: exercise progression, not dying
 var armor := 0.0               # Plating: fraction of incoming damage removed
 var regen_ps := 0.0            # Regeneration: HP/s while alive
+var trail_color := Color(1.0, 1.0, 1.0, 0.22)   # cosmetic trail tint
 
 var _invuln_left := 0.0
 var _dash_left := 0.0
 var _dash_dir := Vector2.RIGHT
 var _last_move_dir := Vector2.RIGHT
 var _sprite: Sprite2D
+var _trail := PackedVector2Array()
+var _trail_timer := 0.0
 
 
 func _ready() -> void:
@@ -65,6 +68,24 @@ func _physics_process(dt: float) -> void:
 	if regen_ps > 0.0 and hp > 0.0 and hp < max_hp:
 		hp = minf(max_hp, hp + regen_ps * dt)
 		hp_changed.emit(hp, max_hp)
+	# cosmetic motion trail: sample a position every 0.05s, draw fading dots
+	_trail_timer -= dt
+	if _trail_timer <= 0.0:
+		_trail_timer = 0.05
+		_trail.insert(0, position)
+		if _trail.size() > 14:
+			_trail.resize(14)
+		queue_redraw()
+
+
+func set_hero_tint(color: Color) -> void:
+	_sprite.modulate = color
+
+
+func _draw() -> void:
+	for k in _trail.size():
+		var a := 0.28 * (1.0 - float(k) / float(_trail.size()))
+		draw_circle(_trail[k], 9.0 - float(k) * 0.3, Color(trail_color.r, trail_color.g, trail_color.b, a * trail_color.a))
 	# no cooldown: the only gate is the dash itself finishing (ninja rules).
 	# The sword is a separate node with its own _physics_process, so dashing
 	# cannot interrupt the swing.

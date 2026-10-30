@@ -15,6 +15,8 @@ const BASE_MASK := Tags.SLASH_BIT   # the sword is inherently Slash; infusions a
 
 var reach := 155.0
 var damage := 12.0
+var blade_color := Color(0.85, 0.88, 0.95)   # cosmetic sword skin tint
+var smear_color := Color(1.0, 0.9, 0.7, 0.28)  # cosmetic sweep-smear tint
 var swing := SwordSwing.new()
 var combo := ComboCounter.new()
 var hit_tag_mask := 0               # elemental infusions add their tags here
@@ -118,9 +120,9 @@ func _draw() -> void:
 	var a := swing.blade_angle()
 	var dir := Vector2.from_angle(a)
 	var perp := dir.orthogonal()
-	var col := Color(0.85, 0.88, 0.95)
+	var col := blade_color
 	if swing.phase == SwordSwing.Phase.ACTIVE:
-		col = Color(1.0, 0.97, 0.9)
+		col = blade_color.lerp(Color.WHITE, 0.25)
 	# blade slab
 	draw_line(dir * 16.0, dir * reach, col, 12.0)
 	draw_line(dir * (reach - 22.0), dir * reach, col, 20.0)
@@ -134,4 +136,4 @@ func _draw() -> void:
 			Vector2.ZERO, reach * 0.92,
 			minf(arc_start, arc_start + swing.sweep_dir * swept),
 			maxf(arc_start, arc_start + swing.sweep_dir * swept),
-			24, Color(1.0, 0.9, 0.7, 0.28), 22.0)
+			24, smear_color, 22.0)

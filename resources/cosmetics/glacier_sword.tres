@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CosmeticItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/cosmetic_item_def.gd" id="1_cos"]
+
+[resource]
+script = ExtResource("1_cos")
+id = &"glacier_sword"
+display_name = "Glacier Sword Skin"
+description = "A frozen-cyan blade to match the Glacier hero."
+slot = "sword_skin"
+glory_cost = 80
+tint = Color(0.45, 0.85, 1.0, 1)
+smear_color = Color(0.55, 0.9, 1.0, 0.35)

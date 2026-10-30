@@ -12,8 +12,19 @@ extends Node
 
 const SCHEMA_VERSION := 2
 
+# economy pass #1 (Sprint 2.5): named so tuning is a one-place edit.
+# Glory intentionally rewards depth (waves/bosses) over grind (kills).
+const REWARD_XP_PER_WAVE := 8.0
+const REWARD_XP_PER_KILL := 0.3
+const REWARD_XP_PER_BOSS := 25.0
+const REWARD_GLORY_BASE := 10
+const REWARD_GLORY_PER_WAVE := 3
+const REWARD_GLORY_PER_KILL := 0.05
+const REWARD_GLORY_PER_BOSS := 15
+
 var save_path := "user://meta_save.json"
 var ability_lookup: Callable = Callable()   # id -> UniversalAbilityDef (tests inject; default resolves via ContentLoader)
+var cosmetic_lookup: Callable = Callable()  # id -> CosmeticItemDef (tests inject; default resolves via ContentLoader)
 var curve: ProgressionCurve = null          # set from ContentLoader at ready
 
 var hero_xp := 0.0
@@ -24,6 +35,8 @@ var total_kills := 0
 var total_runs := 0
 var loadouts: Array = []            # [{name: String, ability_ids: Array[StringName]}]
 var last_loadout_index := 0
+var owned_cosmetics: Array = []             # StringName ids
+var equipped_cosmetics: Dictionary = {}     # slot -> StringName id
 
 
 func _ready() -> void:
@@ -82,9 +95,11 @@ func set_hero_level(n: int) -> void:
 
 ## Applies a finished run's rewards and stat tracking, saves, and returns the
 ## earned amounts for the Run Summary screen. (Bot/automation runs skip this.)
+## Applies a finished run's rewards and stat tracking, saves, and returns the
+## earned amounts for the Run Summary screen. (Bot/automation runs skip this.)
 func record_run(waves_reached: int, kills: int, boss_kills: int) -> Dictionary:
-	var earned_xp := waves_reached * 8.0 + kills * 0.3 + boss_kills * 25.0
-	var earned_glory := int(waves_reached * 2 + kills / 10.0 + boss_kills * 10)
+	var earned_xp := waves_reached * REWARD_XP_PER_WAVE + kills * REWARD_XP_PER_KILL + boss_kills * REWARD_XP_PER_BOSS
+	var earned_glory := REWARD_GLORY_BASE + int(waves_reached * REWARD_GLORY_PER_WAVE + kills * REWARD_GLORY_PER_KILL + boss_kills * REWARD_GLORY_PER_BOSS)
 	add_hero_xp(earned_xp)
 	glory += earned_glory
 	best_wave = maxi(best_wave, waves_reached)
@@ -92,6 +107,61 @@ func record_run(waves_reached: int, kills: int, boss_kills: int) -> Dictionary:
 	total_runs += 1
 	save()
 	return {"hero_xp": earned_xp, "glory": earned_glory}
+
+
+# --- cosmetics -----------------------------------------------------------------
+
+## HARD RULE context: cosmetics carry zero stats (cosmetic_item_def.gd has no
+## stat fields by construction) — these methods only track ownership and
+## which visual is equipped per slot.
+func owns_cosmetic(id: StringName) -> bool:
+	return owned_cosmetics.has(id)
+
+
+func _cosmetic_def_of(id: StringName):
+	if cosmetic_lookup.is_valid():
+		return cosmetic_lookup.call(id)
+	return ContentLoader.cosmetic_by_id(id)
+
+
+## Returns "" on success or the reason the purchase was refused.
+func buy_cosmetic(def) -> String:
+	if def == null:
+		return "unknown cosmetic"
+	if owns_cosmetic(def.id):
+		return "already owned"
+	if glory < def.glory_cost:
+		return "not enough Glory (%d/%d)" % [glory, def.glory_cost]
+	glory -= def.glory_cost
+	owned_cosmetics.append(def.id)
+	save()
+	return ""
+
+
+func equip_cosmetic(id: StringName) -> String:
+	var def = _cosmetic_def_of(id)
+	if def == null:
+		return "unknown cosmetic"
+	if not owns_cosmetic(id):
+		return "not owned yet"
+	equipped_cosmetics[def.slot] = id
+	save()
+	return ""
+
+
+func unequip_slot(slot: String) -> void:
+	equipped_cosmetics.erase(slot)
+	save()
+
+
+## Resolves the equipped cosmetics to defs: {slot: CosmeticItemDef}.
+func equipped_cosmetic_defs() -> Dictionary:
+	var out := {}
+	for slot in equipped_cosmetics:
+		var def = _cosmetic_def_of(equipped_cosmetics[slot])
+		if def != null:
+			out[slot] = def
+	return out
 
 
 # --- loadouts ------------------------------------------------------------------
@@ -188,18 +258,30 @@ func save() -> void:
 		"total_runs": total_runs,
 		"loadouts": loadouts,
 		"last_loadout_index": last_loadout_index,
+		"owned_cosmetics": owned_cosmetics,
+		"equipped_cosmetics": equipped_cosmetics,
 	}
-	var f := FileAccess.open(save_path, FileAccess.WRITE)
+	# atomic write (Sprint 2.5 hardening): land a temp file first, keep the
+	# previous save as .bak, then swap — a crash mid-write can't corrupt the
+	# live profile.
+	var tmp := save_path + ".tmp"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
-		push_warning("meta save failed: %s" % save_path)
+		push_warning("meta save failed: %s" % tmp)
 		return
 	f.store_string(JSON.stringify(data, "\t"))
 	f.close()
+	if FileAccess.file_exists(save_path):
+		DirAccess.copy_absolute(save_path, save_path + ".bak")
+	var err := DirAccess.rename_absolute(tmp, save_path)
+	if err != OK:
+		push_warning("meta save swap failed (%s) — keeping previous file" % error_string(err))
 
 
 ## Always starts from defaults, then overwrites from disk — so a corrupt or
 ## missing file cleanly yields a fresh profile instead of stale half-state.
-## Schema 1 saves (no loadouts) load with defaults for the new fields.
+## Falls back to the .bak backup when the live save is unreadable.
+## Schema 1 saves (no loadouts/cosmetics) load with defaults for new fields.
 func load_save() -> void:
 	hero_xp = 0.0
 	hero_level = 1
@@ -209,29 +291,49 @@ func load_save() -> void:
 	total_runs = 0
 	loadouts = []
 	last_loadout_index = 0
-	if not FileAccess.file_exists(save_path):
+	owned_cosmetics = []
+	equipped_cosmetics = {}
+	var data := _read_save_file(save_path)
+	if data.is_empty() and FileAccess.file_exists(save_path + ".bak"):
+		push_warning("meta save unreadable — trying backup")
+		data = _read_save_file(save_path + ".bak")
+	if data.is_empty():
 		return
-	var f := FileAccess.open(save_path, FileAccess.READ)
-	if f == null:
-		return
-	var parsed = JSON.parse_string(f.get_as_text())
-	f.close()
-	if typeof(parsed) != TYPE_DICTIONARY:
-		push_warning("meta save unreadable — starting fresh")
-		return
-	var schema: int = int(parsed.get("schema_version", 0))
-	if schema > SCHEMA_VERSION:
-		push_warning("meta save from a newer build — starting fresh")
-		return
-	hero_xp = float(parsed.get("hero_xp", 0.0))
-	hero_level = maxi(int(parsed.get("hero_level", 1)), 1)
-	glory = int(parsed.get("glory", 0))
-	best_wave = int(parsed.get("best_wave", 0))
-	total_kills = int(parsed.get("total_kills", 0))
-	total_runs = int(parsed.get("total_runs", 0))
-	var raw_loadouts = parsed.get("loadouts", [])
+	hero_xp = float(data.get("hero_xp", 0.0))
+	hero_level = maxi(int(data.get("hero_level", 1)), 1)
+	glory = int(data.get("glory", 0))
+	best_wave = int(data.get("best_wave", 0))
+	total_kills = int(data.get("total_kills", 0))
+	total_runs = int(data.get("total_runs", 0))
+	var raw_loadouts = data.get("loadouts", [])
 	if typeof(raw_loadouts) == TYPE_ARRAY:
 		for entry in raw_loadouts:
 			if typeof(entry) == TYPE_DICTIONARY and typeof(entry.get("ability_ids", [])) == TYPE_ARRAY:
 				loadouts.append({"name": str(entry.get("name", "Loadout")), "ability_ids": entry["ability_ids"]})
-	last_loadout_index = clampi(int(parsed.get("last_loadout_index", 0)), 0, maxi(loadouts.size() - 1, 0))
+	last_loadout_index = clampi(int(data.get("last_loadout_index", 0)), 0, maxi(loadouts.size() - 1, 0))
+	var raw_owned = data.get("owned_cosmetics", [])
+	if typeof(raw_owned) == TYPE_ARRAY:
+		for id in raw_owned:
+			owned_cosmetics.append(StringName(str(id)))
+	var raw_equipped = data.get("equipped_cosmetics", {})
+	if typeof(raw_equipped) == TYPE_DICTIONARY:
+		for slot in raw_equipped:
+			equipped_cosmetics[str(slot)] = StringName(str(raw_equipped[slot]))
+
+
+func _read_save_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {}
+	var parsed = JSON.parse_string(f.get_as_text())
+	f.close()
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_warning("meta save unreadable: %s" % path)
+		return {}
+	var schema: int = int(parsed.get("schema_version", 0))
+	if schema > SCHEMA_VERSION:
+		push_warning("meta save from a newer build — ignoring: %s" % path)
+		return {}
+	return parsed

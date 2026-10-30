@@ -9,9 +9,11 @@ var universal_abilities: Array = []
 var enemies: Array = []
 var waves: Array = []
 var evolutions: Array = []
+var cosmetics: Array = []
 var progression_curve: ProgressionCurve = null
 
 var _ability_index: Dictionary = {}
+var _cosmetic_index: Dictionary = {}
 
 
 func _ready() -> void:
@@ -24,6 +26,7 @@ func load_all() -> void:
 	enemies = _scan_dir("res://resources/enemies")
 	waves = _scan_dir("res://resources/waves")
 	evolutions = _scan_dir("res://resources/evolutions")
+	cosmetics = _scan_dir("res://resources/cosmetics")
 	waves.sort_custom(func(a, b): return a.number < b.number)
 	var curves := _scan_dir("res://resources/progression")
 	if curves.size() > 0:
@@ -31,10 +34,17 @@ func load_all() -> void:
 	_ability_index.clear()
 	for def in universal_abilities:
 		_ability_index[def.id] = def
+	_cosmetic_index.clear()
+	for def in cosmetics:
+		_cosmetic_index[def.id] = def
 
 
 func ability_by_id(id: StringName) -> UniversalAbilityDef:
 	return _ability_index.get(id)
+
+
+func cosmetic_by_id(id: StringName) -> CosmeticItemDef:
+	return _cosmetic_index.get(id)
 
 
 func _scan_dir(path: String) -> Array:
