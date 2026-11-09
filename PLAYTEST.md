@@ -76,3 +76,21 @@ Living list for batch playtests — one section per sprint's additions, newest l
 - [ ] **Settings** (menu + hub): Master/Music/SFX/UI sliders change volumes immediately; Fullscreen toggle works; settings survive an app restart
 - [ ] **Persistence hardening**: profile survives an app restart with cosmetics owned/equipped intact
 - [ ] Zero-stats rule: cosmetics change NOTHING about damage/HP/speed (a fresh run with the Void set plays identically to a bare run)
+
+---
+
+## Patch 2.5.1 — playtest triage fixes (re-verify these)
+
+- [ ] **Dash reliability**: dash now fires even right after choice screens (input queued during pauses); slightly-early presses buffer for 0.25s — spam away
+- [ ] **Orbiting Blades no longer resets** after evolving into Solar Halo (base ability can't be re-picked; offers exclude it)
+- [ ] **No choice-screen soft lock**: banish/reroll down to an empty pool resumes the run instead of freezing
+- [ ] **Loadout screen**: real AP bar (green → red at budget), refused equips show a clear reason line
+- [ ] **hero_level console works in-run too** (F1 in a run: `hero_level 20` — applies next run)
+- [ ] **Opening pick offers ALL equipped actives** — your whole kit choice, not a random 3
+- [ ] **Blood Infusion** (new upgrade): sword hits apply Bleed → **Blood Boil** now reachable (kill a Burning+Bleeding enemy)
+- [ ] **Cinder Bolt** (new ability): fire homing bolt — with Pyre Attunement + Solar Halo, Fire resonance is reachable (3 fire-tagged equipped)
+- [ ] **Resonance (Pyre)**: with Cinder Bolt + Solar Halo + Pyre Attunement equipped, kills spread Burn
+- [ ] **Shatter**: with Frost Infusion, chilled enemies take doubled slash damage (look for the big number)
+- [ ] **Bosses stay in the arena** during charges (wave 20/30 rush no longer exits the boundary)
+- [ ] **Visibility**: lightning bolts bigger, Spitter projectiles bigger, Popper blasts last longer, HUD shows your online abilities + ranks
+- [ ] Hero placeholder is now white — equipped cosmetic tints read clearly

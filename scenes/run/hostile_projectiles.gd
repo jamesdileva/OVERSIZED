@@ -63,5 +63,5 @@ func _draw() -> void:
 	for k in POOL:
 		if _active[k] == 0:
 			continue
-		draw_circle(_pos[k], 6.0, Color(1.0, 0.2, 0.55, 0.95))
-		draw_circle(_pos[k], 2.5, Color(1.0, 0.85, 0.95, 0.95))
+		draw_circle(_pos[k], 9.0, Color(1.0, 0.2, 0.55, 0.95))
+		draw_circle(_pos[k], 3.5, Color(1.0, 0.85, 0.95, 0.95))

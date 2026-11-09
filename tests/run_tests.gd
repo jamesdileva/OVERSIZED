@@ -47,6 +47,8 @@ func _initialize() -> void:
 	_test_resonance()
 	_test_offer_bias_banish()
 	_test_evolution()
+	_test_dash_queue()
+	_test_blood_and_cinder_content()
 	_test_cosmetics()
 	_test_settings_and_atomic_save()
 	print("")
@@ -571,7 +573,7 @@ func _test_ability_caster() -> void:
 	group.add_default()
 	var sim: HordeSim = group.hordes[0]["sim"]
 	var player := Player.new()
-	var run := {"xp_magnet_radius": 90.0, "xp_mult": 1.0}
+	var run := {"xp_magnet_radius": 90.0, "xp_mult": 1.0, "gems": XpGems.new()}
 	var boss_hits := []
 	var caster := AbilityCaster.new()
 	check(caster is Node2D, "caster is Node2D — child hazards inherit the player transform")
@@ -951,7 +953,7 @@ func _test_resonance() -> void:
 	group.add_default()
 	var player := Player.new()
 	var caster := AbilityCaster.new()
-	caster.setup(group, player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0},
+	caster.setup(group, player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0, "gems": XpGems.new()},
 			func(_p, _r, _a, _m): pass)
 	var pyre := UniversalAbilityDef.new()
 	pyre.id = &"pyre"
@@ -1016,7 +1018,7 @@ func _test_evolution() -> void:
 	print("evolution: Orbiting Blades at max rank + Fire Infusion -> Solar Halo")
 	var player := Player.new()
 	var caster := AbilityCaster.new()
-	caster.setup(HordeGroup.new(), player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0},
+	caster.setup(HordeGroup.new(), player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0, "gems": XpGems.new()},
 			func(_p, _r, _a, _m): pass)
 	var orbit := UniversalAbilityDef.new()
 	orbit.id = &"orbit_blades"
@@ -1037,12 +1039,69 @@ func _test_evolution() -> void:
 	halo.tags = Tags.FIRE_BIT
 	halo.magnitude = 1.6
 	check(caster.evolve(&"orbit_blades", halo), "evolve succeeds at max rank")
-	check(caster.rank_of(&"orbit_blades") == 0 and caster.rank_of(&"solar_halo") == 5,
-			"entry swapped, rank carried over")
+	check(caster.rank_of(&"orbit_blades") == 5 and caster.rank_of(&"solar_halo") == 5,
+			"entry swapped, rank carried over (base id aliases to the result)")
 	check(evolved_ids.size() == 1, "evolved signal fired once")
 	check(caster._orbit != null and absf(caster._orbit._radius - 198.4) < 0.1,
 			"orbit hazard reconfigured with Solar Halo potency (radius 198.4)")
+	# aliasing: the base id resolves to the evolved form — no reset possible
+	check(caster.rank_of(&"orbit_blades") == 5, "rank_of(base) follows the evolution alias")
+	var ranks: Dictionary = caster.taken_ranks()
+	check(int(ranks.get(&"orbit_blades", 0)) == 5, "taken_ranks caps aliased base at 5 (roller excludes it)")
+	caster.bring_online(orbit)
+	check(caster.rank_of(&"orbit_blades") == 5 and caster.rank_of(&"solar_halo") == 5,
+			"bring_online of an evolved base is a no-op (no reset)")
 	player.free()
+
+
+func _test_dash_queue() -> void:
+	print("dash queue: event-driven request survives pauses, consumes on resume")
+	var player := Player.new()
+	var press := InputEventKey.new()
+	press.keycode = KEY_SPACE
+	press.physical_keycode = KEY_SPACE
+	press.pressed = true
+	player._unhandled_key_input(press)
+	check(player._dash_queued, "dash key event queues a dash")
+	paused = true
+	player._try_consume_dash()  # physics is gated on pause; call directly
+	check(not player._dash_queued and player._dash_left > 0.0 and paused,
+			"dash consumed despite paused tree (fires on resume)")
+	paused = false
+	var left: float = player._dash_left
+	player._try_consume_dash()
+	check(player._dash_left > 0.0 and absf(player._dash_left - left) < 0.2, "dash runs its course after resuming")
+	player.free()
+
+
+func _test_blood_and_cinder_content() -> void:
+	print("content: Blood Infusion + Cinder Bolt close the Bleed/Fire-resonance gaps")
+	var loader = load("res://autoload/content_loader.gd").new()
+	loader.load_all()
+	var blood = null
+	var cinder = null
+	for d in loader.sword_upgrades:
+		if d.id == &"blood_infusion":
+			blood = d
+	for d in loader.universal_abilities:
+		if d.id == &"cinder_bolt":
+			cinder = d
+	check(blood != null and (blood.tags & Tags.BLOOD_BIT) != 0, "Blood Infusion carries the Blood tag")
+	check(cinder != null and (cinder.tags & Tags.FIRE_BIT) != 0, "Cinder Bolt carries the Fire tag")
+	var sword := Sword.new()
+	var ctx := {"sword": sword, "group": HordeGroup.new(), "player": null, "run": {"leech_on_kill": 0.0}}
+	UpgradeEffects.apply(blood, ctx)
+	check(sword.hit_tag_mask & Tags.BLOOD_BIT != 0, "Blood Infusion adds BLOOD to the sword's hit mask")
+	var sim := HordeSim.new(8)
+	var i := sim.spawn(Vector2.ZERO)
+	sim.damage(i, 0.0, Vector2.ZERO, Tags.BLOOD_BIT)
+	check(sim.status_mask[i] & Tags.BLEED_BIT != 0, "Blood-tagged hit applies Bleed")
+	var fire_abilities := 0
+	for d in loader.universal_abilities:
+		if (d.tags & Tags.FIRE_BIT) != 0:
+			fire_abilities += 1
+	check(fire_abilities >= 3, "3 fire-tagged abilities exist (Fire resonance reachable)")
+	sword.free()
 
 
 func _test_cosmetics() -> void:

@@ -1,18 +1,16 @@
 class_name ChoiceScreen
 extends CanvasLayer
 
-## The shared pick UI (implementation-guide.md §9): shows up to CARD_COUNT
-## cards over a dimmed, tree-paused run and emits chosen(index). Sprint 2.4
-## adds reroll + banish (the per-run allotment lives with the caller) and
-## rarity tiers on the cards. Deliberately data-agnostic — callers pass view
-## objects + an owned-counts map. Pausing the tree is the caller's job; this
-## node runs in PROCESS_MODE_ALWAYS so its buttons work while frozen.
+## The shared pick UI (implementation-guide.md §9): builds one card per
+## offer (dynamic count) over a dimmed, tree-paused run and emits
+## chosen(index). Sprint 2.4 added reroll + banish + rarity tiers; Sprint
+## 2.5.1 made the card count dynamic so the opening pick can offer every
+## equipped active. Pausing the tree is the caller's job; this node runs in
+## PROCESS_MODE_ALWAYS so its buttons work while frozen.
 
 signal chosen(index: int)
 signal rerolled
 signal banished(index: int)
-
-const CARD_COUNT := 3
 
 var offers: Array = []         # caller-owned objects, mapped by index
 var rerolls_left := 0
@@ -20,9 +18,9 @@ var banishes_left := 0
 
 var _title: Label
 var _footer: Label
-var _buttons: Array[Button] = []
-var _banish_buttons: Array[Button] = []
+var _cards_box: HBoxContainer
 var _reroll_btn: Button
+var _banish_buttons: Array[Button] = []
 
 
 func _ready() -> void:
@@ -43,28 +41,10 @@ func _ready() -> void:
 	_title.add_theme_font_size_override("font_size", 30)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_title)
-	var cards := HBoxContainer.new()
-	cards.alignment = BoxContainer.ALIGNMENT_CENTER
-	cards.add_theme_constant_override("separation", 16)
-	vb.add_child(cards)
-	for k in CARD_COUNT:
-		var slot := VBoxContainer.new()
-		slot.add_theme_constant_override("separation", 4)
-		cards.add_child(slot)
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(240, 200)
-		b.add_theme_font_size_override("font_size", 18)
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.pressed.connect(_on_card.bind(k))
-		slot.add_child(b)
-		_buttons.append(b)
-		var ban := Button.new()
-		ban.text = "Banish"
-		ban.add_theme_font_size_override("font_size", 13)
-		ban.visible = false
-		ban.pressed.connect(_on_banish.bind(k))
-		slot.add_child(ban)
-		_banish_buttons.append(ban)
+	_cards_box = HBoxContainer.new()
+	_cards_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_cards_box.add_theme_constant_override("separation", 16)
+	vb.add_child(_cards_box)
 	var controls := HBoxContainer.new()
 	controls.alignment = BoxContainer.ALIGNMENT_CENTER
 	controls.add_theme_constant_override("separation", 10)
@@ -85,25 +65,40 @@ func open(title: String, p_offers: Array, p_owned: Dictionary = {}, p_rerolls :=
 	rerolls_left = p_rerolls
 	banishes_left = p_banishes
 	_title.text = title
-	for k in _buttons.size():
-		var b := _buttons[k]
-		var ban := _banish_buttons[k]
-		if k < offers.size():
-			var def = offers[k]
-			b.visible = true
-			var stacks: int = p_owned.get(def.id, 0)
-			var owned := "  (owned ×%d)" % stacks if stacks > 0 else ""
-			var tier: StringName = UpgradeEffects.rarity_tier(def.rarity_weight)
-			b.text = "%s  [%s]\n%s\n\n%s" % [def.display_name, tier, owned, def.description]
-		else:
-			b.visible = false
-		ban.visible = banishes_left > 0 and k < offers.size()
+	for c in _cards_box.get_children():
+		_cards_box.remove_child(c)
+		c.free()
+	var first_button: Button = null
+	for k in offers.size():
+		var def = offers[k]
+		var slot := VBoxContainer.new()
+		slot.add_theme_constant_override("separation", 4)
+		_cards_box.add_child(slot)
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(240, 200)
+		b.add_theme_font_size_override("font_size", 18)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.pressed.connect(_on_card.bind(k))
+		var stacks: int = p_owned.get(def.id, 0)
+		var owned := "  (owned ×%d)" % stacks if stacks > 0 else ""
+		var tier: StringName = UpgradeEffects.rarity_tier(def.rarity_weight)
+		b.text = "%s  [%s]\n%s\n\n%s" % [def.display_name, tier, owned, def.description]
+		slot.add_child(b)
+		if first_button == null:
+			first_button = b
+		var ban := Button.new()
+		ban.text = "Banish"
+		ban.add_theme_font_size_override("font_size", 13)
+		ban.visible = banishes_left > 0
+		ban.pressed.connect(_on_banish.bind(k))
+		slot.add_child(ban)
+		_banish_buttons.append(ban)
 	_reroll_btn.text = "Reroll (%d left)" % rerolls_left
 	_reroll_btn.visible = rerolls_left > 0
 	_footer.text = "Banishes left: %d" % banishes_left
 	visible = true
-	if _buttons.size() > 0:
-		_buttons[0].grab_focus()
+	if first_button != null:
+		first_button.grab_focus()
 
 
 func _on_card(index: int) -> void:

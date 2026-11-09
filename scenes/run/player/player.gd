@@ -28,9 +28,11 @@ var bot_dir := Vector2.ZERO
 var invulnerable := false      # bot sessions: exercise progression, not dying
 var armor := 0.0               # Plating: fraction of incoming damage removed
 var regen_ps := 0.0            # Regeneration: HP/s while alive
-var trail_color := Color(1.0, 1.0, 1.0, 0.22)   # cosmetic trail tint
+var trail_color := Color(1.0, 1.0, 1.0, 0.4)   # cosmetic trail tint (bolder for visibility)
 
 var _invuln_left := 0.0
+var _dash_queued := false      # event-driven dash request (works across choice-screen pauses)
+var _dash_queue_left := 0.0
 var _dash_left := 0.0
 var _dash_dir := Vector2.RIGHT
 var _last_move_dir := Vector2.RIGHT
@@ -41,11 +43,15 @@ var _trail_timer := 0.0
 
 func _ready() -> void:
 	_sprite = Sprite2D.new()
-	_sprite.texture = PlaceholderTex.circle(24, Color(0.95, 0.9, 0.8))
+	_sprite.texture = PlaceholderTex.circle(24, Color.WHITE)  # white base: cosmetic tints read pure
+	# ALWAYS so the dash input queue survives choice-screen pauses; gated inside
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_sprite)
 
 
 func _physics_process(dt: float) -> void:
+	if get_tree().paused:
+		return   # dash queue intentionally persists across choice-screen pauses
 	if _invuln_left > 0.0:
 		_invuln_left -= dt
 		_sprite.modulate.a = 0.55 + 0.45 * absf(sin(_invuln_left * 25.0))
@@ -84,15 +90,31 @@ func set_hero_tint(color: Color) -> void:
 
 func _draw() -> void:
 	for k in _trail.size():
-		var a := 0.28 * (1.0 - float(k) / float(_trail.size()))
-		draw_circle(_trail[k], 9.0 - float(k) * 0.3, Color(trail_color.r, trail_color.g, trail_color.b, a * trail_color.a))
-	# no cooldown: the only gate is the dash itself finishing (ninja rules).
-	# The sword is a separate node with its own _physics_process, so dashing
-	# cannot interrupt the swing.
-	if Input.is_action_just_pressed("dash") and _dash_left <= 0.0 and hp > 0.0:
+		var a := 0.4 * (1.0 - float(k) / float(_trail.size()))
+		draw_circle(_trail[k], 11.0 - float(k) * 0.35, Color(trail_color.r, trail_color.g, trail_color.b, a * trail_color.a))
+	_try_consume_dash()
+
+
+## Consumes a queued dash (ninja rules: no cooldown, the only gate is the
+## dash itself finishing). Requests arrive via _unhandled_key_input, which
+## fires even while the tree is paused — so a dash pressed during a choice
+## screen fires the moment play resumes instead of being swallowed.
+func _try_consume_dash() -> void:
+	if _dash_queue_left > 0.0:
+		_dash_queue_left -= get_physics_process_delta_time()
+		if _dash_queue_left <= 0.0:
+			_dash_queued = false
+	if _dash_queued and _dash_left <= 0.0 and hp > 0.0:
+		_dash_queued = false
 		_dash_dir = _last_move_dir
 		_dash_left = DASH_TIME
 		_invuln_left = maxf(_invuln_left, DASH_TIME + 0.05)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event.is_action_pressed("dash"):
+		_dash_queued = true
+		_dash_queue_left = 0.25   # input buffer: a slightly-early press still dashes
 
 
 func hurt(amount: float, push_dir: Vector2) -> void:

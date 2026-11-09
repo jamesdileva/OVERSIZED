@@ -7,6 +7,7 @@ extends Control
 
 var _owned_box: VBoxContainer
 var _equipped_box: VBoxContainer
+var _ap_bar: ColorRect
 var _ap_label: Label
 var _slots_label: Label
 var _error: Label
@@ -34,6 +35,15 @@ func _ready() -> void:
 	_ap_label.add_theme_font_size_override("font_size", 20)
 	_ap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_ap_label)
+	var ap_bg := ColorRect.new()
+	ap_bg.color = Color(0.0, 0.0, 0.0, 0.55)
+	ap_bg.custom_minimum_size = Vector2(340, 14)
+	_ap_bar = ColorRect.new()
+	_ap_bar.color = Color(0.45, 0.85, 0.5)
+	_ap_bar.position = Vector2(2, 2)
+	_ap_bar.size = Vector2(336, 10)
+	ap_bg.add_child(_ap_bar)
+	vb.add_child(ap_bg)
 	_slots_label = Label.new()
 	_slots_label.add_theme_font_size_override("font_size", 16)
 	_slots_label.modulate = Color(1, 1, 1, 0.65)
@@ -63,7 +73,7 @@ func _ready() -> void:
 	_equipped_box.add_theme_constant_override("separation", 6)
 	equipped_col.add_child(_equipped_box)
 	_error = Label.new()
-	_error.add_theme_font_size_override("font_size", 16)
+	_error.add_theme_font_size_override("font_size", 20)
 	_error.modulate = Color(1.0, 0.45, 0.4)
 	_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_error)
@@ -95,6 +105,8 @@ func _refresh() -> void:
 	for id in equipped:
 		used += MetaProgression._cost_of(id)
 	_ap_label.text = "AP %d / %d" % [used, MetaProgression.ap_budget()]
+	_ap_bar.size.x = 336.0 * clampf(float(used) / maxf(MetaProgression.ap_budget(), 1.0), 0.0, 1.0)
+	_ap_bar.color = Color(0.45, 0.85, 0.5) if used <= MetaProgression.ap_budget() else Color(1.0, 0.4, 0.35)
 	_slots_label.text = "slots %d / %d  —  swapping is free, changes save instantly" % [
 		equipped.size(), MetaProgression.slot_cap()]
 	for id in MetaProgression.owned_abilities():

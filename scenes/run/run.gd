@@ -48,6 +48,7 @@ var _shot_burn := false
 var _hud_hp: ColorRect
 var _hud_xp: ColorRect
 var _hud_info: Label
+var _hud_loadout: Label
 var _boss_bar: ColorRect
 var _boss_bar_bg: ColorRect
 var _hud_accum := 0.0
@@ -132,6 +133,7 @@ func _ready() -> void:
 		"heal": {"args": [], "desc": "restore full HP"},
 		"wave": {"args": ["n"], "desc": "jump to wave n (for testing late waves)"},
 		"give_xp": {"args": ["n"], "desc": "grant n XP (triggers level-ups)"},
+		"hero_level": {"args": ["n"], "desc": "set Hero Level (applies next run)"},
 		"restart": {"args": [], "desc": "restart the run"},
 	})
 
@@ -285,6 +287,12 @@ func _process(dt: float) -> void:
 		var time_txt := "BOSS" if director.current.boss != null else "%ds" % ceili(director.time_left)
 		_hud_info.text = "Wave %d — %s  |  Lv %d  |  enemies %d  |  kills %d  |  [Space] dash  |  [R] restart" % [
 			director.wave_number, time_txt, character_level, group.total_active(), kills]
+		var parts := []
+		var ranks := caster.taken_ranks()
+		for id in ranks:
+			var d = ContentLoader.ability_by_id(id)
+			parts.append("%s %d" % [d.display_name if d != null else str(id), ranks[id]])
+		_hud_loadout.text = " ".join(parts)
 		_hud_accum = 0.0
 	if boss != null and boss.brain != null:
 		_boss_bar_bg.visible = true
@@ -305,7 +313,21 @@ func _clear_wave() -> void:
 	EventBus.wave_cleared.emit(director.wave_number)
 	var offers := UpgradeEffects.roll_upgrade_offers(
 		ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
-	_show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+	# empty pool (everything maxed/banished) resumes the run — no soft lock
+	if not _show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades):
+		director.advance()
+		_apply_wave_mods()
+		_start_wave()
+
+
+## Unpauses and resumes the flow when a choice chain ends with nothing to
+## offer (empty pool after banishes/rerolls/maxed picks) — no soft lock.
+func _resume_after_choice(kind: String) -> void:
+	get_tree().paused = false
+	if kind == "wave":
+		director.advance()
+		_apply_wave_mods()
+		_start_wave()
 
 
 ## Shared pause-and-present for every choice screen variant (wave / level /
@@ -367,13 +389,16 @@ func _on_reroll() -> void:
 		"wave":
 			var offers := UpgradeEffects.roll_upgrade_offers(
 				ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
-			_show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+			if not _show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades):
+				_resume_after_choice("wave")
 		"level":
 			var offers := UpgradeEffects.roll_upgrade_offers(
 				_equipped_defs, caster.taken_ranks(), 3, banished, _bias_tags())
-			_show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
+			if not _show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks()):
+				_resume_after_choice("level")
 		"opening":
-			_open_opening_pick()
+			if not _open_opening_pick():
+				_resume_after_choice("opening")
 
 
 func _on_banish(index: int) -> void:
@@ -384,13 +409,16 @@ func _on_banish(index: int) -> void:
 		"wave":
 			var offers := UpgradeEffects.roll_upgrade_offers(
 				ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
-			_show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades)
+			if not _show_choice("wave", "WAVE %d CLEARED — CHOOSE AN UPGRADE" % director.wave_number, offers, taken_upgrades):
+				_resume_after_choice("wave")
 		"level":
 			var offers := UpgradeEffects.roll_upgrade_offers(
 				_equipped_defs, caster.taken_ranks(), 3, banished, _bias_tags())
-			_show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks())
+			if not _show_choice("level", "LEVEL %d — CHOOSE AN ABILITY" % character_level, offers, caster.taken_ranks()):
+				_resume_after_choice("level")
 		"opening":
-			_open_opening_pick()
+			if not _open_opening_pick():
+				_resume_after_choice("opening")
 
 
 func _on_reaction(kind: StringName, pos: Vector2, radius: float, amount: float) -> void:
@@ -531,7 +559,8 @@ func _on_enemy_exploded(pos: Vector2, radius: float, damage: float) -> void:
 	var ring := BurstRing.new()
 	ring.position = pos
 	ring.radius = radius
-	ring.life = 0.25
+	ring.life = 0.45
+	ring.color = Color(1.0, 0.2, 0.55)   # hostile hue
 	add_child(ring)
 	camera.add_trauma(0.2)
 	if player.position.distance_to(pos) < radius:
@@ -614,9 +643,14 @@ func _build_hud() -> void:
 	xp_bg.add_child(_hud_xp)
 	_hud_info = Label.new()
 	_hud_info.text = ""
+	var loadout_label := Label.new()
+	loadout_label.add_theme_font_size_override("font_size", 12)
+	loadout_label.modulate = Color(1, 1, 1, 0.55)
+	_hud_loadout = loadout_label
 	vb.add_child(hp_bg)
 	vb.add_child(xp_bg)
 	vb.add_child(_hud_info)
+	vb.add_child(_hud_loadout)
 	margin.add_child(vb)
 	layer.add_child(margin)
 	player.hp_changed.connect(_on_hp_changed)   # player.died is connected in _ready
@@ -740,6 +774,12 @@ func console_wave(n: String) -> String:
 func console_give_xp(n: String) -> String:
 	_on_xp_collected(float(maxi(int(n), 1)))
 	return "granted XP — level %d, %d choice(s) pending" % [character_level, pending_level_choices]
+
+
+func console_hero_level(n: String) -> String:
+	MetaProgression.set_hero_level(maxi(int(n), 1))
+	return "Hero Level set to %d (%d abilities owned) — applies on your next run" % [
+		MetaProgression.hero_level, MetaProgression.owned_abilities().size()]
 
 
 func console_restart() -> String:

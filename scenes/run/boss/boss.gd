@@ -26,6 +26,9 @@ var _slam_pos := Vector2.ZERO
 var _attack_cd := 1.4                # first attack shortly after spawn
 var _hit_player_this_charge := false
 var _champ_speed := 1.0              # champion_modifier_slots bonus
+const ARENA_HALF := 1350.0
+const ARENA_MIN := Vector2(-ARENA_HALF, -ARENA_HALF)
+const ARENA_MAX := Vector2(ARENA_HALF, ARENA_HALF)
 
 
 func setup(p_def: BossDef, player: Player) -> void:
@@ -60,6 +63,7 @@ func _physics_process(dt: float) -> void:
 				position += to.normalized() * def.move_speed * mult * dt
 			else:
 				_player.hurt(def.contact_damage, to.normalized())
+			position = position.clamp(ARENA_MIN, ARENA_MAX)
 			_attack_cd -= dt
 			if _attack_cd <= 0.0:
 				_pattern = (_pattern + 1) % 2
@@ -82,7 +86,7 @@ func _physics_process(dt: float) -> void:
 					_attack_cd = def.attack_interval / mult
 		State.CHARGE:
 			_charge_left -= dt
-			position += _charge_dir * def.charge_speed * mult * dt
+			position = (position + _charge_dir * def.charge_speed * mult * dt).clamp(ARENA_MIN, ARENA_MAX)
 			if not _hit_player_this_charge \
 					and _player.global_position.distance_to(global_position) < body_radius + 16.0:
 				_hit_player_this_charge = true

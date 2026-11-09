@@ -22,6 +22,7 @@ var _player: Player
 var _run                       # run scene: holds xp_magnet_radius / xp_mult for passives
 var _boss_damage_at: Callable  # (pos, radius, amount, mask) — run applies it to the boss
 var _entries := {}             # id -> {"def": def, "rank": int, "cd": float}
+var _aliases := {}             # evolved base id -> result id (rank_of follows the chain)
 var _orbit: OrbitBlades = null
 var resonances := {}           # tag bit -> true when 3+ equipped abilities share it
 
@@ -38,16 +39,18 @@ func setup(group: HordeGroup, player: Player, run, boss_damage_at: Callable) -> 
 
 
 func bring_online(def: UniversalAbilityDef) -> void:
-	if _entries.has(def.id):
+	var rid := _resolve(def.id)
+	if _entries.has(rid):
 		return
-	_entries[def.id] = {"def": def, "rank": 1, "cd": def.cooldown * 0.5}
+	_entries[rid] = {"def": def, "rank": 1, "cd": def.cooldown * 0.5}
 	_refresh(def)
 
 
 func rank_up(id: StringName) -> bool:
-	if not _entries.has(id):
+	var rid := _resolve(id)
+	if not _entries.has(rid):
 		return false
-	var e: Dictionary = _entries[id]
+	var e: Dictionary = _entries[rid]
 	var def: UniversalAbilityDef = e["def"]
 	if int(e["rank"]) >= def.max_rank:
 		return false
@@ -56,14 +59,27 @@ func rank_up(id: StringName) -> bool:
 	return true
 
 
+## Resolves evolution aliases: after Orbiting Blades evolves into Solar
+## Halo, every query for "orbit_blades" (offers, ranks, bring_online)
+## resolves to "solar_halo" — the base ability can never be re-picked to
+## reset the evolved form.
+func _resolve(id: StringName) -> StringName:
+	while _aliases.has(id):
+		id = _aliases[id]
+	return id
+
+
 func rank_of(id: StringName) -> int:
-	return int(_entries[id]["rank"]) if _entries.has(id) else 0
+	var rid := _resolve(id)
+	return int(_entries[rid]["rank"]) if _entries.has(rid) else 0
 
 
 func taken_ranks() -> Dictionary:
 	var out := {}
 	for id in _entries:
 		out[id] = int(_entries[id]["rank"])
+	for old in _aliases:
+		out[old] = rank_of(_aliases[old])   # aliased bases report their result's rank, so the offer roller caps them
 	return out
 
 
@@ -85,21 +101,24 @@ func tick(dt: float) -> void:
 ## Evolve an equipped ability that hit the conditions (EvolutionDef):
 ## the entry is replaced by the result def, carrying its rank over.
 func evolve(old_id: StringName, result: UniversalAbilityDef) -> bool:
-	var rank := rank_of(old_id)
-	if rank <= 0 or _entries.has(result.id):
+	var rid := _resolve(old_id)
+	if not _entries.has(rid) or _entries.has(_resolve(result.id)):
 		return false
-	_entries.erase(old_id)
+	var rank := int(_entries[rid]["rank"])
+	_entries.erase(rid)
 	_entries[result.id] = {"def": result, "rank": rank, "cd": 0.0}
+	_aliases[rid] = result.id
 	_refresh(result)
 	evolved.emit(old_id, result.id)
 	return true
 
 
 func _refresh(def: UniversalAbilityDef) -> void:
+	var rid := _resolve(def.id)
 	if def.kind == "passive":
 		_refresh_passives()
 	elif def.effect_id == &"orbit_blades":
-		_ensure_orbit(def)
+		_ensure_orbit(rid, def)
 
 
 func _fire(def: UniversalAbilityDef, rank: int) -> void:
@@ -199,10 +218,10 @@ func has_resonance(tag_bit: int) -> bool:
 	return resonances.get(tag_bit, false)
 
 
-func _ensure_orbit(def: UniversalAbilityDef) -> void:
+func _ensure_orbit(rid: StringName, def: UniversalAbilityDef) -> void:
 	if _orbit == null:
 		_orbit = OrbitBlades.new()
 		add_child(_orbit)
 		_orbit.setup(_group, _player)
-	_orbit.configure(int(_entries[def.id]["rank"]), def.magnitude)
+	_orbit.configure(int(_entries[rid]["rank"]), def.magnitude)
 	_orbit.tag_mask = def.tags
