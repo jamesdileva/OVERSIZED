@@ -9,6 +9,7 @@ extends Resource
 
 @export var id: StringName
 @export var display_name: String
+@export var texture: Texture2D               # sprite (placeholder-final pixel art, Sprint 3.1)
 @export var max_health: float = 30.0
 @export var move_speed: float = 150.0
 @export var scale: float = 1.0             # visual + contact-footprint size
@@ -30,3 +31,5 @@ extends Resource
 @export var windup_time: float = 0.5
 @export var blast_radius: float = 0.0
 @export var blast_damage: float = 0.0
+@export var death_spawn_id: StringName = &""   # on death, spawn N of this def (Splitter)
+@export var death_spawn_count: int = 0

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"glacial_fang"
+display_name = "Glacial Fang"
+description = "EVOLVED — a fang of deepest frost hunts your enemies and Chills everything it strikes."
+kind = "active"
+ap_cost = 5
+unlock_level = 1
+tags = 258
+max_rank = 5
+cooldown = 2.2
+effect_id = &"spirit_blade"
+magnitude = 18.0
+rarity_weight = 0.4

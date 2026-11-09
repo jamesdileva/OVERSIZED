@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"frost_nova"
+display_name = "Frost Nova"
+description = "Periodically releases a freezing burst — damages and Chills everything nearby."
+kind = "active"
+ap_cost = 4
+unlock_level = 1
+tags = 130
+max_rank = 5
+cooldown = 6.0
+effect_id = &"frost_nova"
+magnitude = 16.0
+rarity_weight = 0.6

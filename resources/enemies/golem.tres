@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/golem.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/golem.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"golem"
+display_name = "Golem"
+texture = ExtResource("2_tex")
+max_health = 220.0
+move_speed = 70.0
+scale = 2.3
+contact_damage = 22.0
+behavior = "tank"
+xp_value = 6.0
+tint = Color(0.5, 0.5, 0.55, 1)
+min_wave = 16
+spawn_weight = 0.5
+texture = ExtResource("2_tex")

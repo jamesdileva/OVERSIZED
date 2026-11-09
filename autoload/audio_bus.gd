@@ -84,6 +84,73 @@ func load_settings() -> void:
 	fullscreen = bool(parsed.get("fullscreen", false))
 
 
+var _music_player: AudioStreamPlayer = null
+var _current_track := ""
+
+## Looping music through the Music bus (Sprint 3.1 lane). Tracks are
+## generated WAV loops; switching tracks stops the previous one.
+## Parses a generated 16-bit PCM WAV at runtime and builds a forward-looping
+## AudioStreamWAV — bypasses the import pipeline (QOA compression there broke
+## playback instantiation, Sprint 3.1). Callers pass the asset path.
+func play_music(track_id: String, path: String) -> void:
+	if _music_player == null:
+		_music_player = AudioStreamPlayer.new()
+		_music_player.bus = "Music"
+		add_child(_music_player)
+	if _current_track == track_id and _music_player.playing:
+		return
+	var stream := _load_wav_stream(path)
+	if stream == null:
+		push_warning("music track failed to load: %s" % path)
+		return
+	_current_track = track_id
+	_music_player.stream = stream
+	_music_player.play()
+
+
+func _load_wav_stream(path: String) -> AudioStreamWAV:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return null
+	var raw := f.get_buffer(f.get_length())
+	f.close()
+	if raw.size() < 44:
+		return null
+	var riff := raw.slice(0, 4).get_string_from_ascii()
+	var wave := raw.slice(8, 12).get_string_from_ascii()
+	if riff != "RIFF" or wave != "WAVE":
+		return null
+	var data := PackedByteArray()
+	var channels := 1
+	var pos := 12
+	while pos + 8 <= raw.size():
+		var tag := raw.slice(pos, pos + 4).get_string_from_ascii()
+		var size := raw.decode_u32(pos + 4)
+		if tag == "fmt ":
+			channels = raw.decode_u16(pos + 12)
+			pos += 8 + size
+		elif tag == "data":
+			data = raw.slice(pos + 8, mini(pos + 8 + size, raw.size()))
+			break
+		else:
+			pos += 8 + size
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = 22050
+	stream.stereo = channels > 1
+	stream.data = data
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = data.size() / 2 / channels   # frames for 16-bit
+	return stream
+
+
+func stop_music() -> void:
+	if _music_player != null:
+		_music_player.stop()
+	_current_track = ""
+
+
 func register_sound(id: StringName, max_voices := 4, min_interval_ms := 40) -> void:
 	_limits[id] = {"max": max_voices, "interval": min_interval_ms}
 

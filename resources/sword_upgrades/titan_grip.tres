@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SwordUpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/sword_upgrade_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"titan_grip"
+display_name = "Titan Grip"
+description = "+15 reach and +30% knockback. Bigger, heavier, harder."
+effect_type = "stat_mod"
+effect_id = &"titan_grip"
+magnitude = 1.0
+rarity_weight = 0.7
+max_stacks = 3
+tags = 4194336

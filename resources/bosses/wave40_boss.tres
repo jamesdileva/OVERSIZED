@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BossDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/boss_def.gd" id="1_boss"]
+
+[resource]
+script = ExtResource("1_boss")
+id = &"riftmaw"
+display_name = "Riftmaw, the Hunger Below"
+max_health = 6500.0
+move_speed = 100.0
+contact_damage = 22.0
+attack_interval = 1.9
+telegraph_time = 0.6
+charge_speed = 860.0
+charge_damage = 30.0
+slam_radius = 240.0
+slam_damage = 34.0
+enrage_time = 90.0
+champion_modifier_slots = 0

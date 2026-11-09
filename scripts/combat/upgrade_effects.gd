@@ -30,6 +30,11 @@ static func apply(def: SwordUpgradeDef, ctx: Dictionary) -> void:
 			sword.damage += def.magnitude
 		&"momentum":
 			group.scale_knockback(1.0 + def.magnitude)
+		&"titan_grip":
+			sword.reach += 15.0
+			group.scale_knockback(1.3)
+		&"vampiric":
+			run.leech_on_hit += def.magnitude
 		&"leech":
 			run.leech_on_kill += def.magnitude
 		&"spin_finisher":

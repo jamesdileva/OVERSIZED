@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SwordUpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/sword_upgrade_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"vampiric_brand"
+display_name = "Vampiric Brand"
+description = "Every landed hit restores 1 HP. The crowd is a snack bar."
+effect_type = "on_hit_effect"
+effect_id = &"vampiric"
+magnitude = 1.0
+rarity_weight = 0.6
+max_stacks = 3
+tags = 2228240

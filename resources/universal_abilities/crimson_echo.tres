@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UniversalAbilityDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/universal_ability_def.gd" id="1_ab"]
+
+[resource]
+script = ExtResource("1_ab")
+id = &"crimson_echo"
+display_name = "Crimson Echo"
+description = "Periodically drains the nearest enemy — a portion becomes your HP."
+kind = "active"
+ap_cost = 3
+unlock_level = 1
+tags = 524304
+max_rank = 5
+cooldown = 2.0
+effect_id = &"crimson_echo"
+magnitude = 12.0
+rarity_weight = 0.6

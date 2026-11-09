@@ -94,3 +94,33 @@ Living list for batch playtests — one section per sprint's additions, newest l
 - [ ] **Bosses stay in the arena** during charges (wave 20/30 rush no longer exits the boundary)
 - [ ] **Visibility**: lightning bolts bigger, Spitter projectiles bigger, Popper blasts last longer, HUD shows your online abilities + ranks
 - [ ] Hero placeholder is now white — equipped cosmetic tints read clearly
+
+---
+
+## Batch 4 — after Sprint 3.1 (sprites, music, content fill, deep waves)
+
+### Sprint 3.1 — content fill part A + art lane
+- [ ] **Sprites**: hero is a pixel knight, enemies are distinct pixel sprites (imp/wasp/streak/horned brick/pink mouth/yellow popper/splitter/shards/golem/strides) — no more colored dots
+- [ ] **Sprites tint correctly**: cosmetic hero/sword tints and Burn/Chill status colors still read on the sprites
+- [ ] **Music**: menu/hub has an ambient loop; the run has a driving loop; they switch between scenes and loop cleanly
+- [ ] **Splitter** (wave 14+, purple): kills it and 3 shards burst out and chase you
+- [ ] **Wasp** (wave 14+, yellow-striped): keeps distance and fires faster than Spitter
+- [ ] **Golem** (wave 16+, gray giant): very slow, very tanky, hits like a truck
+- [ ] **Volatile** (wave 18+, cracked orange): bigger/faster Popper variant
+- [ ] **Waves 31-40**: compositions escalate; **Riftmaw** at wave 40 is a bigger fight than Dreadwake (champion-modified stats)
+- [ ] **Executioner's Edge**: enemies below ~15% HP die in one stroke
+- [ ] **Vampiric Brand**: heal 1 HP per landed hit
+- [ ] **Titan Grip**: +15 reach, +30% knockback
+- [ ] **Frost Nova**: periodic burst chills everything around you (cyan ring)
+- [ ] **Crimson Echo**: periodic drain of the nearest enemy heals you
+- [ ] **Glacial Fang evolution**: Spirit Blade rank 5 + Frost Infusion → "evolved into Glacial Fang!" — frost homing fangs
+- [ ] **Resonance tier-2**: equip 5+ Fire-tagged abilities — bigger Burn spread radius
+- [ ] Performance: sprites + statuses + music at deep waves still hold the frame rate
+
+### Regression sweep (each batch)
+- [ ] Full loop: menu → run → death → summary → hub → menu
+- [ ] Dash (queued now — works even pressed during choice screens)
+- [ ] No choice-screen soft locks even after banishing everything
+- [ ] Orbiting Blades/Solar Halo never resets
+- [ ] Loadout AP bar updates; refusals explain why
+- [ ] Save survives an app restart

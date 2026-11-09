@@ -141,6 +141,19 @@ func _fire(def: UniversalAbilityDef, rank: int) -> void:
 			blade.setup(_group, def.magnitude * (1.0 + 0.35 * float(rank - 1)), def.tags)
 			add_child(blade)
 			blade.global_position = p
+		&"frost_nova":
+			var radius := 210.0 + 16.0 * float(rank - 1)
+			var dmg := def.magnitude * (1.0 + 0.4 * float(rank - 1))
+			_group.circle_damage(p, radius, dmg, def.tags, 0.6)
+			effect_visual.emit(&"frost_nova", p, radius)
+		&"crimson_echo":
+			var victim := _nearest_victim(p, 400.0)
+			if victim.sim == null:
+				return  # nobody in range: cooldown restarts, effect skips
+			var drain := def.magnitude * (1.0 + 0.4 * float(rank - 1))
+			victim.sim.damage(victim.index, drain, Vector2.ZERO, def.tags)
+			_player.heal(drain * 0.3)
+			effect_visual.emit(&"crimson_echo", victim.sim.positions[victim.index], 40.0)
 		_:
 			push_warning("unknown ability effect_id: %s" % def.effect_id)
 
@@ -156,6 +169,20 @@ func _random_victim(p: Vector2, radius: float) -> Dictionary:
 	if all.is_empty():
 		return {"sim": null, "index": -1}
 	return all[randi() % all.size()]
+
+
+## {sim, index} of the nearest living enemy within `range` across all types.
+func _nearest_victim(p: Vector2, radius: float) -> Dictionary:
+	var best := {"sim": null, "index": -1, "dist": -1.0}
+	for h in _group.hordes:
+		var s: HordeSim = h["sim"]
+		for i in s.grid.circle_candidates(p, radius):
+			if i >= s.active_count:
+				continue
+			var d: float = s.positions[i].distance_to(p)
+			if best["dist"] < 0.0 or d < best["dist"]:
+				best = {"sim": s, "index": i, "dist": d}
+	return {"sim": best["sim"], "index": best["index"]}
 
 
 func _aoe(center: Vector2, radius: float, amount: float, knock_scale: float, tag_mask: int) -> void:
@@ -201,9 +228,14 @@ func _refresh_passives() -> void:
 				_group.add_increased(def.tags, def.magnitude * float(rank))
 	# resonance tier-1 (architecture.md §5.4): 3+ equipped sharing an element
 	# grants +15% increased damage of that element
+	# resonance tiers (architecture.md §5.4): tier-1 at 3+ shared, tier-2 at 5+
 	for bit in tag_counts:
-		if int(tag_counts[bit]) >= 3:
-			resonances[bit] = true
+		var count := int(tag_counts[bit])
+		if count >= 5:
+			resonances[bit] = 2
+			_group.add_increased(bit, 0.30)
+		elif count >= 3:
+			resonances[bit] = 1
 			_group.add_increased(bit, 0.15)
 	_player.set_max_hp(max_hp)
 	_player.move_speed = speed
@@ -214,8 +246,9 @@ func _refresh_passives() -> void:
 	_run.gems.xp_mult = xp_mult   # gems apply the multiplier at pickup
 
 
-func has_resonance(tag_bit: int) -> bool:
-	return resonances.get(tag_bit, false)
+## 0 = none, 1 = tier-1 (3+ shared), 2 = tier-2 (5+ shared).
+func resonance_tier(tag_bit: int) -> int:
+	return int(resonances.get(tag_bit, 0))
 
 
 func _ensure_orbit(rid: StringName, def: UniversalAbilityDef) -> void:

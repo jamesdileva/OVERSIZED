@@ -22,6 +22,7 @@ var boss: Boss = null
 var kills := 0
 var taken_upgrades := {}             # SwordUpgradeDef.id -> stack count
 var leech_on_kill := 0.0
+var leech_on_hit := 0.0
 var xp := 0.0
 var character_level := 1
 var pending_level_choices := 0
@@ -114,9 +115,10 @@ func _ready() -> void:
 		var view := HordeRenderer.new()
 		add_child(view)
 		var diameter := 14.0 * (d.scale if d != null else 1.0)
-		view.setup(s, diameter, d.tint if d != null else Color(0.9, 0.32, 0.22))
+		view.setup(s, diameter, d.tint if d != null else Color(0.9, 0.32, 0.22), d.texture if d != null else null)
 		s.exploded.connect(_on_enemy_exploded)
 		s.reaction_fired.connect(_on_reaction)
+		s.enemy_killed.connect(func(at: Vector2, st: int) -> void: _on_enemy_killed(at, d))
 		s.shot.connect(func(pos: Vector2, dir: Vector2, dmg: float, speed: float) -> void:
 			hostile_shots.fire(pos, dir, dmg, speed))
 	# kills + XP flow through the group's re-emitted signal (xp_value attached)
@@ -124,8 +126,11 @@ func _ready() -> void:
 		kills += 1
 		gems.spawn(at, xp_value * (1.0 + float(director.wave_number) * 0.06))
 		# Pyre Resonance: kills spread fire — 0-damage Burn application nearby
-		if caster.has_resonance(Tags.FIRE_BIT):
-			group.circle_damage(at, 140.0, 0.0, Tags.FIRE_BIT, 0.0, 1))
+		var tier: int = caster.resonance_tier(Tags.FIRE_BIT)
+		if tier > 0:
+			group.circle_damage(at, 140.0 + 80.0 * float(tier - 1), 0.0, Tags.FIRE_BIT, 0.0, 1))
+
+	AudioBus.play_music(&"run", "res://assets/audio/music/run_loop.wav")
 
 	_build_hud()
 	DebugConsole.register_handler(self, {
@@ -515,6 +520,8 @@ func _contact_damage() -> void:
 func _on_sword_hit(pos: Vector2, amount: float, killed: bool) -> void:
 	numbers.pop(pos, amount, killed)
 	camera.add_trauma(0.06 + (0.28 if killed else 0.0))
+	if leech_on_hit > 0.0:
+		player.heal(leech_on_hit)
 	if killed and leech_on_kill > 0.0:
 		player.heal(leech_on_kill)
 	if killed:
@@ -553,6 +560,15 @@ func _boss_damage_at(pos: Vector2, radius: float, amount: float, tag_mask: int =
 	if boss != null and boss.global_position.distance_to(pos) <= radius + boss.body_radius:
 		boss.take_damage(group.modified(amount, tag_mask))
 		numbers.pop(boss.global_position, amount, false)
+
+
+## Splitter-style death spawns: the dying def names what bursts out.
+func _on_enemy_killed(at: Vector2, d: EnemyDef) -> void:
+	if d == null or d.death_spawn_id == &"" or d.death_spawn_count <= 0:
+		return
+	for k in d.death_spawn_count:
+		var jitter := Vector2(randf_range(-24.0, 24.0), randf_range(-24.0, 24.0))
+		group.spawn_by_id(d.death_spawn_id, at + jitter)
 
 
 func _on_enemy_exploded(pos: Vector2, radius: float, damage: float) -> void:

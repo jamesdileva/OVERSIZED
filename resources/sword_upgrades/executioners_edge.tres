@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SwordUpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/sword_upgrade_def.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = &"executioners_edge"
+display_name = "Executioner's Edge"
+description = "Your blade severs anything below 15% health in one stroke. What it does to full-health things, it does harder."
+effect_type = "on_hit_effect"
+effect_id = &"infuse"
+magnitude = 0.0
+rarity_weight = 0.5
+max_stacks = 1
+tags = 8519712

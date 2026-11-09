@@ -36,6 +36,8 @@ func _initialize() -> void:
 	_test_statuses()
 	_test_damage_mods()
 	_test_tags_coverage()
+	_test_execute_mechanic()
+	_test_resonance_tiers()
 	_test_progression_curve()
 	_test_loadout_rules()
 	_test_enemy_defs_load()
@@ -975,9 +977,9 @@ func _test_resonance() -> void:
 	fire_thing2.effect_id = &"plating"
 	caster.bring_online(pyre)
 	caster.bring_online(fire_thing)
-	check(not caster.has_resonance(Tags.FIRE_BIT), "2 fire-tagged abilities: no resonance yet")
+	check(not caster.resonance_tier(Tags.FIRE_BIT) > 0, "2 fire-tagged abilities: no resonance yet")
 	caster.bring_online(fire_thing2)
-	check(caster.has_resonance(Tags.FIRE_BIT), "3 fire-tagged abilities: Fire resonance active")
+	check(caster.resonance_tier(Tags.FIRE_BIT) > 0, "3 fire-tagged abilities: Fire resonance active")
 	check(absf(group.modified(100.0, Tags.FIRE_BIT) - 140.0) < 0.01,
 			"Fire damage: 25% amplifier + 15% resonance = +40%")
 	player.free()
@@ -1101,7 +1103,55 @@ func _test_blood_and_cinder_content() -> void:
 		if (d.tags & Tags.FIRE_BIT) != 0:
 			fire_abilities += 1
 	check(fire_abilities >= 3, "3 fire-tagged abilities exist (Fire resonance reachable)")
+	check(loader.enemies.size() >= 13, "13 enemy types load (got %d)" % loader.enemies.size())
+	check(loader.evolutions.size() >= 2, "2 evolution recipes load (got %d)" % loader.evolutions.size())
+	var wave40: WaveDef = loader.waves[39]
+	check(wave40.number == 40 and wave40.boss != null, "wave 40 references a boss")
 	sword.free()
+
+
+func _test_execute_mechanic() -> void:
+	print("execute: EXECUTE-tagged hits sever below 15% max health")
+	var sim := HordeSim.new(16)
+	var i := sim.spawn(Vector2.ZERO)   # 30 max HP -> execute threshold 4.5
+	sim.damage(i, 0.0, Vector2.ZERO, (1 << Tags.Tag.EXECUTE))
+	check(sim.active_count == 1, "above threshold: execute does nothing")
+	sim.damage(i, 27.0, Vector2.ZERO, (1 << Tags.Tag.EXECUTE))   # 3/30 = 10% -> severed
+	check(sim.active_count == 0, "below threshold: execute severs the enemy")
+	var sim2 := HordeSim.new(16)
+	var j := sim2.spawn(Vector2.ZERO)
+	sim2.damage(j, 26.0, Vector2.ZERO, (1 << Tags.Tag.EXECUTE))   # 4/30 = 13.3% -> severed
+	check(sim2.active_count == 0, "execute works at the 15% boundary (13.3% < 15%)")
+
+
+func _test_resonance_tiers() -> void:
+	print("resonance tiers: tier-1 at 3+, tier-2 at 5+ shared")
+	var group := HordeGroup.new()
+	group.add_default()
+	var player := Player.new()
+	var caster := AbilityCaster.new()
+	caster.setup(group, player, {"xp_magnet_radius": 90.0, "xp_mult": 1.0, "gems": XpGems.new()},
+			func(_p, _r, _a, _m): pass)
+	var defs := []
+	for k in 5:
+		var d := UniversalAbilityDef.new()
+		d.id = StringName("fire_%d" % k)
+		d.kind = "passive"
+		d.effect_id = &"plating"   # harmless recompute branch
+		d.tags = Tags.FIRE_BIT
+		d.ap_cost = 2
+		d.max_rank = 3
+		defs.append(d)
+	caster.bring_online(defs[0])
+	caster.bring_online(defs[1])
+	caster.bring_online(defs[2])
+	check(caster.resonance_tier(Tags.FIRE_BIT) == 1, "3 shared: tier-1")
+	check(absf(group.modified(100.0, Tags.FIRE_BIT) - 115.0) < 0.01, "tier-1 grants +15% increased")
+	caster.bring_online(defs[3])
+	caster.bring_online(defs[4])
+	check(caster.resonance_tier(Tags.FIRE_BIT) == 2, "5 shared: tier-2")
+	check(absf(group.modified(100.0, Tags.FIRE_BIT) - 130.0) < 0.01, "tier-2 grants +30% increased")
+	player.free()
 
 
 func _test_cosmetics() -> void:
@@ -1152,15 +1202,15 @@ func _test_cosmetics() -> void:
 func _test_settings_and_atomic_save() -> void:
 	print("settings + atomic save: volumes round-trip, .bak backup on rewrite")
 	var ab = load("res://autoload/audio_bus.gd").new()
-	ab.SETTINGS_PATH = "user://test_audio_settings.json"
+	ab.settings_path = "user://test_audio_settings.json"
 	ab.set_volume("Music", 0.4)
 	ab.set_volume("SFX", 0.9)
 	var ab2 = load("res://autoload/audio_bus.gd").new()
-	ab2.SETTINGS_PATH = ab.SETTINGS_PATH
+	ab2.settings_path = ab.settings_path
 	ab2.load_settings()
 	check(absf(ab2.volumes["Music"] - 0.4) < 0.01 and absf(ab2.volumes["SFX"] - 0.9) < 0.01,
 			"audio settings round-trip from disk")
-	var f := FileAccess.open(ab.SETTINGS_PATH, FileAccess.READ)
+	var f := FileAccess.open(ab.settings_path, FileAccess.READ)
 	var text := f.get_as_text()
 	f.close()
 	check("\"schema_version\": 1" in text, "settings file carries schema_version")
@@ -1174,5 +1224,5 @@ func _test_settings_and_atomic_save() -> void:
 	mp2.save_path = mp.save_path
 	mp2.load_save()
 	check(mp2.best_wave == 8 and mp2.total_runs == 2, "latest profile state loads after atomic swap")
-	for p in [mp.save_path, mp.save_path + ".bak", ab.SETTINGS_PATH]:
+	for p in [mp.save_path, mp.save_path + ".bak", ab.settings_path]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(p))

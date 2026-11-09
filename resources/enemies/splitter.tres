@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resource_defs/enemy_def.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/splitter.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/splitter.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"splitter"
+display_name = "Splitter"
+texture = ExtResource("2_tex")
+max_health = 45.0
+move_speed = 140.0
+scale = 1.2
+contact_damage = 10.0
+behavior = "chaser"
+xp_value = 2.0
+tint = Color(0.75, 0.3, 0.5, 1)
+min_wave = 14
+spawn_weight = 0.8
+death_spawn_id = &"splitter_shard"
+death_spawn_count = 3
+texture = ExtResource("2_tex")

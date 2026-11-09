@@ -43,7 +43,8 @@ var _trail_timer := 0.0
 
 func _ready() -> void:
 	_sprite = Sprite2D.new()
-	_sprite.texture = PlaceholderTex.circle(24, Color.WHITE)  # white base: cosmetic tints read pure
+	_sprite.texture = load("res://assets/sprites/hero.png")   # pixel sprite (white base: cosmetic tints read pure)
+	_sprite.scale = Vector2(3, 3)   # 16px sprite x3 = 48px, within the size guide
 	# ALWAYS so the dash input queue survives choice-screen pauses; gated inside
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_sprite)

@@ -14,6 +14,7 @@ var progression_curve: ProgressionCurve = null
 
 var _ability_index: Dictionary = {}
 var _cosmetic_index: Dictionary = {}
+var _enemy_index: Dictionary = {}
 
 
 func _ready() -> void:
@@ -37,6 +38,9 @@ func load_all() -> void:
 	_cosmetic_index.clear()
 	for def in cosmetics:
 		_cosmetic_index[def.id] = def
+	_enemy_index.clear()
+	for def in enemies:
+		_enemy_index[def.id] = def
 
 
 func ability_by_id(id: StringName) -> UniversalAbilityDef:
@@ -45,6 +49,10 @@ func ability_by_id(id: StringName) -> UniversalAbilityDef:
 
 func cosmetic_by_id(id: StringName) -> CosmeticItemDef:
 	return _cosmetic_index.get(id)
+
+
+func enemy_by_id(id: StringName) -> EnemyDef:
+	return _enemy_index.get(id)
 
 
 func _scan_dir(path: String) -> Array:

@@ -163,6 +163,12 @@ func damage(i: int, amount: float, dir: Vector2, tag_mask: int = 0, proc_depth: 
 	healths[i] -= final
 	hit_flash[i] = 1.0
 	velocities[i] += dir * knockback_impulse
+	# Execute: a hit carrying EXECUTE severs anything below 15% max health.
+	# (Bosses live outside the sims — deliberately not executable.)
+	if (tag_mask & (1 << Tags.Tag.EXECUTE)) != 0:
+		var max_now := (def.max_health if def != null else 30.0) * health_scale
+		if healths[i] > 0.0 and healths[i] < 0.15 * max_now:
+			healths[i] = 0.0
 	_apply_status_from_tags(i, tag_mask)
 	hit_event.emit(positions[i], final, tag_mask, sm_before)
 	# Steam Burst: a Frost hit landing on something already Burning

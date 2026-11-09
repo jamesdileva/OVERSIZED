@@ -71,6 +71,14 @@ func spawn_weighted(pos: Vector2, wave_number: int) -> int:
 	return pool[pool.size() - 1]["sim"].spawn(pos)
 
 
+## Spawn into the sim matching a specific def (Splitter death-splits).
+func spawn_by_id(def_id: StringName, pos: Vector2) -> int:
+	for h in hordes:
+		if h["def"] != null and h["def"].id == def_id:
+			return h["sim"].spawn(pos)
+	return -1
+
+
 func step_all(dt: float, target: Vector2) -> void:
 	for h in hordes:
 		h["sim"].step(dt, target)

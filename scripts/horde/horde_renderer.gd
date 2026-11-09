@@ -14,7 +14,7 @@ var _dot_color := Color(0.9, 0.3, 0.22)
 var _flash_color := Color(1.0, 0.95, 0.85)
 
 
-func setup(sim: HordeSim, dot_diameter := 14.0, tint := Color(0.9, 0.3, 0.22)) -> void:
+func setup(sim: HordeSim, dot_diameter := 14.0, tint := Color(0.9, 0.3, 0.22), texture: Texture2D = null) -> void:
 	_sim = sim
 	_dot_color = tint
 	var quad := QuadMesh.new()
@@ -33,7 +33,10 @@ func setup(sim: HordeSim, dot_diameter := 14.0, tint := Color(0.9, 0.3, 0.22)) -
 	_multimesh.visible_instance_count = 0
 	var mmi := MultiMeshInstance2D.new()
 	mmi.multimesh = _multimesh
-	mmi.texture = _make_dot_texture(int(dot_diameter))
+	if texture != null:
+		mmi.texture = texture                       # sprite art (placeholder-final, Sprint 3.1)
+	else:
+		mmi.texture = _make_dot_texture(int(dot_diameter))
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://assets/shaders/enemy_wobble.gdshader")
 	mmi.material = mat

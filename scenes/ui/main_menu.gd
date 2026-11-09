@@ -5,6 +5,7 @@ extends Control
 
 
 func _ready() -> void:
+	AudioBus.play_music(&"menu", "res://assets/audio/music/menu_loop.wav")
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color(0.09, 0.09, 0.12)
