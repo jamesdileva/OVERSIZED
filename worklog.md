@@ -398,6 +398,32 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 
 ---
 
+## Patch 2.5.1 — playtest triage (2026-11-09)
+
+**Scope**: the user's Batch 1-3 playtest triage (waves 1-30+, informal notes + PLAYTEST.md checkboxes). Fixes for every confirmed bug, content for the unreachable systems, visibility polish. The remaining Batch 3 visuals were noted as "minimal" — expected with placeholder art; re-verify with the white-base change below.
+
+**Fixed (confirmed bugs)**
+- **Choice-screen soft lock**: banishing/rerolling down to an empty offer pool froze the run (paused, no screen). Empty pools now resume the flow — wave clears advance, other choices lift the pause.
+- **Orbiting Blades reset after evolution**: picking the base ability post-evolution created a fresh rank-1 entry over the evolved Solar Halo. The caster now keeps an evolution alias map (base id -> result id) that rank_of/bring_online/taken_ranks all resolve through — the base can never be re-picked, and the offer roller caps it at the carried rank.
+- **Dash was unreliable** — edge-polling () lost presses to choice-screen pauses and frame timing. Dash is now event-driven ( -> 0.25s buffered queue -> consumed in physics), with the player on PROCESS_MODE_ALWAYS + pause gating. Dash pressed during any choice fires the moment play resumes.
+- **run.gd parse error** ( typo from the demo-cosmetics edit) that broke the run scene entirely in automation.
+
+**Content gaps closed (were unreachable)**
+- **Blood Boil had no Bleed producer** — Blood Infusion upgrade added (BLOOD on-hit infusion; Boil now reachable: Burn + Bleed the same enemy, kill it).
+- **Fire resonance was unreachable** (only 2 fire-tagged abilities existed) — Cinder Bolt added (fire homing bolt); with Pyre Attunement + Solar Halo, 3 fire-tagged equipped = Pyre Resonance live.
+
+**Polish**
+- Loadout screen: real AP progress bar, larger refusal reasons, costs visible.
+- Opening pick offers ALL equipped actives (dynamic card count — choice screen rebuilds per open).
+- Boss charges clamp to the arena; lightning bolts bigger/longer; Spitter projectiles larger; Popper blast rings last longer; HUD shows online abilities + ranks; hero placeholder is white so cosmetic tints read.
+
+**Verified**: 111/111 tests (evolution aliasing, dash queue, new content added); boot clean; bot clean (wave 6 / 387 kills). User playtest informally reached wave ~100 and enjoyed it — difficulty flattening at depth logged for the 3.x balance pass.
+
+**Next**: Batch 3 re-verification of this patch (short), then Phase 2 closes and **Phase 3 — Content & Balance** opens (3.1: content fill part A, art timing exercise, synergy matrix run).
+
+
+---
+
 ## Sprint 2.5 — Cosmetics, economy pass, settings (2026-10-30) — PHASE 2 COMPLETE
 
 **Scope** (from `sprint-roadmap.md`, Phase 2 — Sprint 2.5, approved before build): cosmetics equip slots with the zero-stat `CosmeticItemDef`; Glory awards and spending; 2-3 placeholder cosmetic sets; settings menu skeleton wired to buses; economy tuning pass #1; persistence hardening. User playtest before this sprint: reached wave ~100 informally, "felt good" — difficulty-curve flattening at depth noted for the 3.x balance pass.
