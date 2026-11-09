@@ -422,4 +422,47 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 
 **Verified**: 111/111 tests (evolution aliasing, dash queue, new content added); boot clean; bot clean (wave 6 / 387 kills). User playtest informally reached wave ~100 and enjoyed it — difficulty flattening at depth logged for the 3.x balance pass.
 
-**Next**: Batch 3 re-verification of this patch (short), then Phase 2 closes and Phase 3 — Content & Balance opens (3.1: content fill part A, art timing exercise, synergy matrix run).
+
+
+---
+
+## Sprint 3.1 — Content fill, part A + art lane (2026-11-09)
+
+**Scope** (from `sprint-roadmap.md`, Phase 3 — Sprint 3.1, approved before build): content fill to the 3.1 marks (enemies to ~12, boss for wave 40, upgrades/abilities past the 50% EA mark, resonance tier-2, evolution #2), coverage validation, art lane (procedural pixel sprites + first music loops — self-made per the no-commissions decision). User cadence decision: PLAYTEST.md sections populate per sprint; the user re-tests in batches.
+
+**Built**
+
+- **Art lane**: `tests/gen_art.py` — ASCII-defined pixel sprites rendered to PNG via a minimal in-script PNG writer: hero knight + 11 enemy sprites. Per-archetype MultiMesh textures from `EnemyDef.texture`; project-wide nearest filtering; the wobble shader animates sprites via the existing custom-data pipeline. **Two generated chiptune loops** (24s menu ambient, 18s run drive) with `AudioBus.play_music` parsing the 16-bit PCM WAVs at runtime — bypassing the import pipeline (QOA-compressed streams broke playback instantiation when loop-modified).
+- **Enemies to 13 types**: **Splitter** (death-splits into 3 shards — new `death_spawn` mechanic on EnemyDef), **Wasp** (fast ranged), **Golem** (super-tank), **Volatile** (bigger exploder) + Splitter Shard (spawn_weight 0 — death-spawn only).
+- **Waves 31-40 authored**; **Riftmaw, the Hunger Below** at wave 40 (6500 HP, 240 slam radius).
+- **Content**: upgrades to 14 — **Executioner's Edge** (EXECUTE: new sim mechanic, severs below 15% max HP on tagged hits; bosses exempt), **Vampiric Brand** (per-hit heal), **Titan Grip** (+reach/+knockback) — and abilities to 16 — **Frost Nova** (chilling burst), **Crimson Echo** (drain + 30% heal). **Evolution #2**: Spirit Blade r5 + Frost Infusion → **Glacial Fang**. **Resonance tier-2**: 5+ shared tags = +30% increased (Pyre tier-2 also widens the Burn-spread radius).
+- HUD: loadout row showing online abilities + ranks (implementation-guide §12 build-visibility item).
+
+**Verified**
+
+- Tests: **118/118 pass** — execute threshold/boundary, resonance tiers, content loads (13 enemies, 2 evolution recipes, wave-40 boss), infusion applications, plus all prior suites.
+- Boot clean; bot deep-wave runs clean (waves 24-30, 926 kills in the 2.3 regression; wave-30 fresh runs clean).
+- Bench holds; screenshots: sprite-filled wave-12 mix (all types visibly distinct), cosmetics shop.
+- **Art-timing exercise** (deep-dive §16.1): scripted generation of 12 sprites + 2 music loops ran in **under 1 second** — but the full wiring (def fields, renderer paths, music player, debugging) took the bulk of the sprint's tail. Honest rescale: self-made *scripted* art is nearly free for simple silhouettes; hand-drawn final art remains the 3.3 cost. The deep-dive's 265-535h estimate applies to hand-drawn work only.
+
+**Findings worth keeping**
+
+- **Generated content files must be load-asserted immediately**: the bash generator emitted 5-component `Color(...)` constructors and escaped-quote display names — three broken .tres files discovered only by per-file load diagnostics. Fixed by rewriting all seven with Write; the generator stays in `tests/gen_art.py` for regeneration.
+- **`Color.lighten()` doesn't exist in 4.7.2 GDScript** (use `lerp(Color.WHITE, t)`); `-1 << 30` (negative shift) is also a parse error. Two more engine-quirk entries for the quirks list.
+- **QOA-compressed AudioStreamWAV breaks when loop-modified at runtime** — music now bypasses the import pipeline entirely (runtime 16-bit PCM parse via `_load_wav_stream`). Zero playback errors since.
+- Signal arity churn remains the #1 refactor hazard; the compile guard catches parse-level breaks, runtime ones surface as labeled test failures.
+
+**Decisions & deviations**
+
+- Art lane delivered procedurally (user: no commissions, pixel art self-made) — sprites are placeholder-final quality, real hand-drawn art still lands in 3.3 if the user draws it.
+- Music is minimal chiptune loops (menu ambient pad, run bass+arp) — the deep-dive's "first music tracks" lane satisfied with generated assets; better tracks remain a 3.2/3.3 want.
+- Splitter shards have `spawn_weight = 0` so they never appear in the natural spawn pool — death-spawn only.
+- Execute deliberately doesn't work on bosses (outside the sims) — documented in the sim code.
+
+**Deferred**
+
+- Remaining EA content: 6 more upgrades, ~2 more enemies, evolution #3, 3 more cosmetic sets (Sprint 3.2).
+- Music: per-phase run variation, reaction SFX through the AudioBus voice API.
+- Enemy sprites for Spitter/Longshot/Golem/Volatile were generated; final hand-drawn passes remain 3.3.
+
+**Next**: Sprint 3.2 — content fill part B: remainder of the EA content budget, remaining bosses, champion-modifier scaling live beyond the roster, VFX polish for evolutions, art lane continues. **User plays Batch 4 (sprites/music/new enemies/waves 1-40) before or during 3.2** per the batch cadence.
