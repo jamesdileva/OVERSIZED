@@ -465,4 +465,45 @@ Verification: 61/61 tests (new invariant: caster is Node2D); 3-sim-minute bot we
 - Music: per-phase run variation, reaction SFX through the AudioBus voice API.
 - Enemy sprites for Spitter/Longshot/Golem/Volatile were generated; final hand-drawn passes remain 3.3.
 
-**Next**: Sprint 3.2 — content fill part B: remainder of the EA content budget, remaining bosses, champion-modifier scaling live beyond the roster, VFX polish for evolutions, art lane continues. **User plays Batch 4 (sprites/music/new enemies/waves 1-40) before or during 3.2** per the batch cadence.
+
+
+---
+
+## Sprint 3.2 — Content fill, part B + audio lane (2026-11-10)
+
+**Scope** (from sprint-roadmap.md, Phase 3 — Sprint 3.2, approved before build): remainder of the EA content budget; SFX pass to demo tier; Shock/Poison statuses completing the reaction set; champion-modifier scaling live; archetype coverage. User playtest between sprints: waves 1-30 verified clean against PLAYTEST.md (no new issues reported).
+
+**Built**
+
+- **Audio lane complete to demo tier**: 15 procedural SFX (hit light/heavy, kill, XP pickup, level-up, wave clear, dash, hurt, buy, evolve, Steam/Boil reactions, boss roar/slam, UI select) generated via tests/gen_sfx.py and wired through the AudioBus voice-limit pool with per-id retrigger intervals and pitch variation; **boss music loop** on boss waves with run-loop resume.
+- **Statuses completed (5 of 6 taxonomy elements)**: **Shocked** (0.6s near-freeze) and **Poisoned** (stacking DoT, cap 5) join Burn/Chill/Bleed; **Contagion** (Shock on Poisoned spreads) and **Overload** (Orbit hit on Shocked chain-arcs 2 enemies) reactions live — the full deep-dive starting set.
+- **Hybrid fire**: any EnemyDef with attack_range fires regardless of behavior — tank-ranged hybrids possible.
+- **Content**: upgrades to 20 — **Storm Brand** (Shock infusion), **Venom Infusion** (Poison infusion), **Berserker's Pact** (+40% damage below half HP), **Glass Cannon** (+35% dealt/taken), **Giant Slayer** (double vs scale 1.5+ enemies), **Second Wind** (+30% HP on boss death); abilities to 18 defs — **Storm Ring** (shock orbit, pure data reusing the orbit handler) and **Poison Flask** (poison zone); cosmetics to 6 EA sets (Solar/Grove/Bloodmoon); enemies to 15 — **Warden** (tank-ranged hybrid) and **Shade**.
+- **Champion-modifier scaling live** (architecture §9): every 10th wave past 40 returns the wave-40 boss with stacked slots (wave 50 = 2 slots, 60 = 3...cap 5) — the deep-dive's reuse pattern, live.
+- Poison/Storm visual rings; cosmetics shop purchase sound.
+
+**Verified**
+
+- Tests: **118/118 pass** — prior suites plus deep-wave bot progression (waves 24-30, 926 kills) re-verified after the group refactor; boot clean; bot with SFX live clean (wave 29, 944 kills); shop/content screenshots updated.
+
+**Findings worth keeping**
+
+- **Injectable-callable is the only test-safe pattern for autoload access**: player.gd referencing AudioBus directly compiled in the game but failed to compile in the test harness (autoload context differs between compile passes) — the sfx_cb injectable matches boss_getter/boss_damage_at and is now the standard for anything reaching an autoload.
+- **The file-write-loss pattern struck a third time** (choice screen 2.4, cosmetics fields 2.5, patch script 3.2's first run) — every large scripted edit should be verified by grep immediately after.
+- **Bash double-quoted python -c strips bare inner quotes** — the sprite generator corruption root-caused. All multi-line patches now go through Write-tool script files, never inline -c with quote-bearing content.
+
+**Decisions & deviations**
+
+- SFX demo-tier scope: 15 base sounds + pitch variation (deep-dive says 60-80 with variants — variations come free via pitch_scale at play time; more base sounds land with 3.3 polish).
+- Warden designed as tank-ranged hybrid via the attack_range refactor rather than a new behavior — the behavior field stays a movement archetype, firing is orthogonal.
+- Champion scaling reuses the wave-40 boss def (duplicated with stacked slots) rather than new defs — the deep-dive's reuse pattern; distinct champion art is a 3.3 want.
+- Music remains 2 loops + boss loop (3 of the 5-6 EA tracks) — remaining tracks in 3.3 with the art pass.
+
+**Deferred**
+
+- 2 more cosmetic sets + victory-pose content (3.3); evolution #3 beyond the two shipped (Solar Halo, Glacial Fang — EA target 3, third lands in 3.3); Contagion/Overload tuning.
+- Stun status (6th taxonomy element, post-EA).
+- Boss pattern variety (third pattern per boss).
+
+**Next**: **Batch 5 playtest** (user), triage, then Sprint 3.3 — Balance, accessibility, art lock: the dedicated balance pass (debug console + bot data), ProgressionCurve tuning, accessibility basics, art lock — closing Phase 3 and opening Demo Prep (4).
+
