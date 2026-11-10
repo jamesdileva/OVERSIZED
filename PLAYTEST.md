@@ -124,3 +124,24 @@ Living list for batch playtests — one section per sprint's additions, newest l
 - [ ] Orbiting Blades/Solar Halo never resets
 - [ ] Loadout AP bar updates; refusals explain why
 - [ ] Save survives an app restart
+
+---
+
+## Batch 5 — after Sprint 3.2 (SFX, Shock/Poison, archetype content)
+
+### Sprint 3.2 — content fill part B + audio lane
+- [ ] **SFX**: hits, kills, XP pickups, level-ups, wave clears, dash, hurt, buy, evolve, reactions, boss roar/slam — all audible with voice limiting (no machine-gun mud)
+- [ ] **Boss music**: intense loop on boss waves, run loop resumes after
+- [ ] **Storm Brand**: hits apply Shock — enemies briefly near-freeze (white-blue tint)
+- [ ] **Venom Infusion**: hits apply Poison (green tint) — stacks, damage grows with stacks
+- [ ] **Contagion**: hit a poisoned enemy with Shock (Cinder Bolt) — poison spreads nearby
+- [ ] **Overload**: hit a shocked enemy with Orbiting Blades — chain arc to 2 enemies
+- [ ] **Berserker's Pact**: below half HP, damage jumps ~40%
+- [ ] **Glass Cannon**: +35% damage dealt AND taken
+- [ ] **Giant Slayer**: big enemies (Brute/Golem) take double from your blade
+- [ ] **Second Wind**: boss death heals 30% HP
+- [ ] **Storm Ring / Poison Flask**: new actives work (shock orbit / poison zone)
+- [ ] **New cosmetics**: Solar/Grove/Bloodmoon sets equip and tint correctly
+- [ ] **New enemies**: Warden (firing tank) and Shade types appear at deep waves
+- [ ] **Champion scaling**: waves 50/60 return increasingly-stacked bosses
+- [ ] **Archetypes**: Pyre / Frostbite / Blood Knight / Juggernaut / Storm builds all feel distinct
