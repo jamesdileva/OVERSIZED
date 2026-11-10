@@ -84,6 +84,7 @@ func _ready() -> void:
 	caster = AbilityCaster.new()
 	player.add_child(caster)
 	caster.setup(group, player, self, _boss_damage_at)
+	player.sfx_cb = func(id: StringName) -> void: AudioBus.play_sfx(id)
 	caster.effect_visual.connect(_on_ability_visual)
 
 	numbers = DamageNumbers.new()
@@ -124,6 +125,7 @@ func _ready() -> void:
 	# kills + XP flow through the group's re-emitted signal (xp_value attached)
 	group.enemy_killed.connect(func(at: Vector2, xp_value: float, status: int) -> void:
 		kills += 1
+		AudioBus.play_sfx(&"kill", 0.14)
 		gems.spawn(at, xp_value * (1.0 + float(director.wave_number) * 0.06))
 		# Pyre Resonance: kills spread fire — 0-damage Burn application nearby
 		var tier: int = caster.resonance_tier(Tags.FIRE_BIT)
@@ -316,6 +318,7 @@ func _clear_wave() -> void:
 	for h in group.hordes:
 		h["sim"].clear_all()
 	EventBus.wave_cleared.emit(director.wave_number)
+	AudioBus.play_sfx(&"wave_clear")
 	var offers := UpgradeEffects.roll_upgrade_offers(
 		ContentLoader.sword_upgrades, taken_upgrades, 3, banished, _bias_tags())
 	# empty pool (everything maxed/banished) resumes the run — no soft lock
@@ -520,6 +523,7 @@ func _contact_damage() -> void:
 func _on_sword_hit(pos: Vector2, amount: float, killed: bool) -> void:
 	numbers.pop(pos, amount, killed)
 	camera.add_trauma(0.06 + (0.28 if killed else 0.0))
+	AudioBus.play_sfx(&"hit_heavy" if killed else &"hit_light")
 	if leech_on_hit > 0.0:
 		player.heal(leech_on_hit)
 	if killed and leech_on_kill > 0.0:
@@ -541,6 +545,15 @@ func _on_ability_visual(id: StringName, pos: Vector2, radius: float) -> void:
 			flash.position = pos
 			add_child(flash)
 			camera.add_trauma(0.12)
+		&"frost_nova":
+			_spawn_ring(pos, radius, Tags.color_for(Tags.Tag.CHILL))
+			camera.add_trauma(0.2)
+		&"poison_cloud":
+			_spawn_ring(pos, radius, Tags.color_for(Tags.Tag.POISON))
+			camera.add_trauma(0.15)
+		&"crimson_echo":
+			_spawn_ring(pos, radius * 0.5, Tags.color_for(Tags.Tag.BLOOD))
+			camera.add_trauma(0.08)
 
 
 func _on_combo_burst(center: Vector2) -> void:
@@ -755,6 +768,7 @@ func _on_xp_collected(amount: float) -> void:
 		character_level += 1
 		leveled = true
 	if leveled:
+		AudioBus.play_sfx(&"level_up")
 		if choice_screen.visible:
 			pending_level_choices += 1   # a wave-clear choice is open; queue behind it
 		else:

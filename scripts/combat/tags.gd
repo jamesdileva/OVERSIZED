@@ -21,8 +21,12 @@ const FIRE_BIT := 1 << Tag.FIRE
 const FROST_BIT := 1 << Tag.FROST
 const BLOOD_BIT := 1 << Tag.BLOOD
 const SLASH_BIT := 1 << Tag.SLASH
+const SHOCK_BIT := 1 << Tag.SHOCK
+const POISON_BIT := 1 << Tag.POISON
 const BURN_BIT := 1 << Tag.BURN
 const CHILL_BIT := 1 << Tag.CHILL
+const SHOCKED_BIT := 1 << Tag.SHOCKED
+const POISONED_BIT := 1 << Tag.POISONED
 const BLEED_BIT := 1 << Tag.BLEED
 
 # tag→color language (implementation-guide.md §16.3): players learn to read

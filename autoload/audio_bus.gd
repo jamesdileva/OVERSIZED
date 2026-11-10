@@ -28,6 +28,13 @@ func _ready() -> void:
 	for bus_name in volumes:
 		_apply_volume(bus_name, volumes[bus_name])
 	set_fullscreen(fullscreen)
+	# demo-tier SFX registry (implementation-guide §17): id -> [max voices, min retrigger ms]
+	for id in ["hit_light", "hit_heavy", "kill", "xp_pickup", "player_hurt", "reaction_steam"]:
+		register_sfx(StringName(id), 6 if id == StringName("hit_light") else 3, 40)
+	for id in ["level_up", "wave_clear", "buy", "evolve", "boss_roar", "ui_select"]:
+		register_sfx(StringName(id), 1, 0)
+	for id in ["dash", "player_hurt", "reaction_boil", "boss_slam"]:
+		register_sfx(StringName(id), 2, 80)
 
 
 ## Linear 0..1 volume per bus, applied to the AudioServer bus and persisted
@@ -86,6 +93,8 @@ func load_settings() -> void:
 
 var _music_player: AudioStreamPlayer = null
 var _current_track := ""
+var _sfx_players := {}      # id -> AudioStreamPlayer
+var _sfx_streams := {}      # id -> AudioStreamWAV (lazy-loaded, runtime-parsed)
 
 ## Looping music through the Music bus (Sprint 3.1 lane). Tracks are
 ## generated WAV loops; switching tracks stops the previous one.
@@ -153,6 +162,33 @@ func stop_music() -> void:
 
 func register_sound(id: StringName, max_voices := 4, min_interval_ms := 40) -> void:
 	_limits[id] = {"max": max_voices, "interval": min_interval_ms}
+
+
+## Registers a demo-tier SFX: id maps to assets/audio/sfx/<id>.wav (runtime
+## parsed). Limits: hit/kill sounds cap concurrency, others are one-at-a-time
+## with retrigger intervals so the mix never muds (implementation-guide §17).
+func register_sfx(id: StringName, max_voices := 3, min_interval_ms := 40) -> void:
+	_limits[id] = {"max": max_voices, "interval": min_interval_ms}
+
+
+func play_sfx(id: StringName, pitch_var := 0.08) -> void:
+	if not can_play(id):
+		return
+	if not _sfx_streams.has(id):
+		var stream := _load_wav_stream("res://assets/audio/sfx/%s.wav" % id)
+		if stream == null:
+			return
+		_sfx_streams[id] = stream
+	if not _sfx_players.has(id):
+		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
+		p.stream = _sfx_streams[id]
+		add_child(p)
+		p.finished.connect(func() -> void: finished(id))
+		_sfx_players[id] = p
+	var player: AudioStreamPlayer = _sfx_players[id]
+	player.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
+	player.play()
 
 
 ## True when this sound may start now (under its voice cap and outside its

@@ -73,6 +73,7 @@ func _refresh() -> void:
 			buy.text = "Buy"
 			buy.pressed.connect(func() -> void:
 				_error.text = MetaProgression.buy_cosmetic(def)
+				AudioBus.play_sfx(&"buy")
 				_refresh.call_deferred())
 			row.add_child(buy)
 		elif not (equipped.has(def.slot) and equipped[def.slot].id == def.id):

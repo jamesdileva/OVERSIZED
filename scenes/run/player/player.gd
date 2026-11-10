@@ -29,6 +29,7 @@ var invulnerable := false      # bot sessions: exercise progression, not dying
 var armor := 0.0               # Plating: fraction of incoming damage removed
 var regen_ps := 0.0            # Regeneration: HP/s while alive
 var trail_color := Color(1.0, 1.0, 1.0, 0.4)   # cosmetic trail tint (bolder for visibility)
+var sfx_cb: Callable = Callable()              # run wires AudioBus.play_sfx; tests leave unwired
 
 var _invuln_left := 0.0
 var _dash_queued := false      # event-driven dash request (works across choice-screen pauses)
@@ -110,6 +111,8 @@ func _try_consume_dash() -> void:
 		_dash_dir = _last_move_dir
 		_dash_left = DASH_TIME
 		_invuln_left = maxf(_invuln_left, DASH_TIME + 0.05)
+		if sfx_cb.is_valid():
+			sfx_cb.call(&"dash")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -122,6 +125,8 @@ func hurt(amount: float, push_dir: Vector2) -> void:
 	if _invuln_left > 0.0 or hp <= 0.0 or invulnerable:
 		return
 	hp = maxf(0.0, hp - amount * (1.0 - clampf(armor, 0.0, 0.6)))
+	if sfx_cb.is_valid():
+		sfx_cb.call(&"player_hurt")
 	_invuln_left = contact_invuln
 	velocity += push_dir * 220.0
 	hp_changed.emit(hp, max_hp)

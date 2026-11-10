@@ -27,10 +27,19 @@ const ARENA_MAX := Vector2(ARENA_HALF_EXTENT, ARENA_HALF_EXTENT)
 const BURN_BIT := Tags.BURN_BIT
 const CHILL_BIT := Tags.CHILL_BIT
 const BLEED_BIT := Tags.BLEED_BIT
+const SHOCKED_BIT := Tags.SHOCKED_BIT
+const POISONED_BIT := Tags.POISONED_BIT
 const FIRE_BIT := Tags.FIRE_BIT
 const FROST_BIT := Tags.FROST_BIT
 const BLOOD_BIT := Tags.BLOOD_BIT
+const SHOCK_BIT := Tags.SHOCK_BIT
+const POISON_BIT := Tags.POISON_BIT
+const ORBIT_BIT := 1 << Tags.Tag.ORBIT
 const STATUS_DURATION := 3.0
+const SHOCKED_DURATION := 0.6
+const SHOCKED_MOVE := 0.15        # near-frozen while Shocked
+const POISON_DPS_PER_STACK := 3.0
+const POISON_CAP := 5
 const STATUS_TICK := 0.5
 const BURN_DPS := 6.0
 const BLEED_DPS := 9.0
@@ -50,6 +59,9 @@ var status_mask: PackedInt32Array = PackedInt32Array()
 var burn_left := PackedFloat32Array()
 var chill_left := PackedFloat32Array()
 var bleed_left := PackedFloat32Array()
+var shocked_left := PackedFloat32Array()
+var poison_left := PackedFloat32Array()
+var poison_stacks := PackedInt32Array()
 
 var grid: SpatialHash
 
@@ -88,6 +100,9 @@ func _init(p_capacity: int = DEFAULT_CAPACITY) -> void:
 	burn_left.resize(capacity)
 	chill_left.resize(capacity)
 	bleed_left.resize(capacity)
+	shocked_left.resize(capacity)
+	poison_left.resize(capacity)
+	poison_stacks.resize(capacity)
 	_fire_cd.resize(capacity)
 	_windup.resize(capacity)
 	grid = SpatialHash.new(separation_radius * 2.0)
@@ -108,6 +123,9 @@ func spawn(pos: Vector2) -> int:
 	burn_left[i] = 0.0
 	chill_left[i] = 0.0
 	bleed_left[i] = 0.0
+	shocked_left[i] = 0.0
+	poison_left[i] = 0.0
+	poison_stacks[i] = 0
 	_fire_cd[i] = (def.fire_interval if def != null else 0.0) * 0.5
 	_windup[i] = 0.0
 	return i
@@ -127,6 +145,9 @@ func despawn(i: int) -> void:
 		burn_left[i] = burn_left[last]
 		chill_left[i] = chill_left[last]
 		bleed_left[i] = bleed_left[last]
+		shocked_left[i] = shocked_left[last]
+		poison_left[i] = poison_left[last]
+		poison_stacks[i] = poison_stacks[last]
 	active_count = last
 
 
@@ -175,6 +196,12 @@ func damage(i: int, amount: float, dir: Vector2, tag_mask: int = 0, proc_depth: 
 	if proc_depth < 2 and (tag_mask & Tags.FROST_BIT) != 0 and (sm_before & BURN_BIT) != 0:
 		var coeff := 1.0 if proc_depth == 0 else PROC_COEFFICIENT
 		reaction_fired.emit(&"steam_burst", positions[i], STEAM_RADIUS, STEAM_DAMAGE * coeff)
+	# Contagion: a Shock hit on a Poisoned enemy spreads the poison
+	if proc_depth < 2 and (tag_mask & SHOCK_BIT) != 0 and (sm_before & POISONED_BIT) != 0:
+		reaction_fired.emit(&"contagion", positions[i], 150.0, 0.0)
+	# Overload: an Orbit-source hit on a Shocked enemy chain-arcs
+	if proc_depth < 2 and (tag_mask & ORBIT_BIT) != 0 and (sm_before & SHOCKED_BIT) != 0:
+		reaction_fired.emit(&"overload", positions[i], 0.0, final * PROC_COEFFICIENT)
 	if healths[i] <= 0.0:
 		# Blood Boil: dying while bleeding AND burning detonates fire
 		if proc_depth < 2 and (sm_before & BURN_BIT) != 0 and (sm_before & BLEED_BIT) != 0:
@@ -228,6 +255,13 @@ func _apply_status_from_tags(i: int, tag_mask: int) -> void:
 	if tag_mask & BLOOD_BIT:
 		status_mask[i] |= BLEED_BIT
 		bleed_left[i] = STATUS_DURATION
+	if tag_mask & SHOCK_BIT:
+		status_mask[i] |= SHOCKED_BIT
+		shocked_left[i] = SHOCKED_DURATION
+	if tag_mask & POISON_BIT:
+		status_mask[i] |= POISONED_BIT
+		poison_left[i] = STATUS_DURATION
+		poison_stacks[i] = mini(int(poison_stacks[i]) + 1, POISON_CAP)
 
 
 var _status_tick_left := 0.0
@@ -248,21 +282,25 @@ func step(dt: float, target: Vector2) -> void:
 		_status_tick_left = STATUS_TICK
 	_dot_kills.clear()
 	var beh := def.behavior if def != null else "chaser"
-	var is_ranged := beh == "ranged"
+	var is_ranged := beh == "ranged" or (def != null and def.attack_range > 0.0)   # hybrid: tanks/ranged variants fire while closing
 	var is_exploder := beh == "exploder"
 	var range_sq := (def.attack_range if def != null else 0.0) * (def.attack_range if def != null else 0.0)
 	var trig_sq := (def.trigger_radius if def != null else 0.0) * (def.trigger_radius if def != null else 0.0)
 	for i in active_count:
 		var pos: Vector2 = positions[i]
 		var sm := status_mask[i]
-		var chill_mult := 1.0 - (CHILL_SLOW if (sm & CHILL_BIT) != 0 else 0.0)
+		var move_mult := 1.0
+		if (sm & SHOCKED_BIT) != 0:
+			move_mult = SHOCKED_MOVE          # near-frozen: the Shocked window
+		elif (sm & CHILL_BIT) != 0:
+			move_mult = 1.0 - CHILL_SLOW
 		var to_target := target - pos
 		var dist_sq_t := to_target.length_squared()
 		var desired: Vector2
 		if is_ranged and dist_sq_t < range_sq:
 			desired = Vector2.ZERO   # in range: hold position and shoot
 		else:
-			desired = to_target.normalized() * speeds[i] * chill_mult
+			desired = to_target.normalized() * speeds[i] * move_mult
 		var vel: Vector2 = velocities[i].lerp(desired, steer)
 		var push := Vector2.ZERO
 		var checks := 0
@@ -318,13 +356,24 @@ func step(dt: float, target: Vector2) -> void:
 				bleed_left[i] -= dt
 				if bleed_left[i] <= 0.0:
 					ns &= ~BLEED_BIT
+			if shocked_left[i] > 0.0:
+				shocked_left[i] -= dt
+				if shocked_left[i] <= 0.0:
+					ns &= ~SHOCKED_BIT
+			if poison_left[i] > 0.0:
+				poison_left[i] -= dt
+				if poison_left[i] <= 0.0:
+					ns &= ~POISONED_BIT
+					poison_stacks[i] = 0
 			status_mask[i] = ns
-			if do_status_tick and (sm & (BURN_BIT | BLEED_BIT)) != 0:
+			if do_status_tick and (sm & (BURN_BIT | BLEED_BIT | POISONED_BIT)) != 0:
 				var dot := 0.0
 				if (sm & BURN_BIT) != 0:
 					dot += BURN_DPS * STATUS_TICK
 				if (sm & BLEED_BIT) != 0:
 					dot += BLEED_DPS * STATUS_TICK
+				if (ns & POISONED_BIT) != 0:
+					dot += float(poison_stacks[i]) * POISON_DPS_PER_STACK * STATUS_TICK
 				healths[i] -= dot
 				if healths[i] <= 0.0:
 					_dot_kills.append(i)
